@@ -9,7 +9,11 @@ const agent = new https.Agent({ rejectUnauthorized: false });
 export async function POST(req: NextRequest) {
   const { rankLimit, teamColor, topN } = await req.json();
   const normalizedFilter = teamColor.replace(/\s/g, '').toLowerCase();
-  const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
+  const headers = {
+    'x-nxopen-api-key': process.env.FC_API_KEY!,
+    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0'
+  };
 
   const spidMap: Record<number, string> = {};
   const seasonMap: Record<number, string> = {};
@@ -63,48 +67,66 @@ export async function POST(req: NextRequest) {
   const userMatchResults: any[] = [];
 
   for (const user of rankedUsers) {
-    const nicknameClean = user.nickname.trim();
+    const nicknameClean = user.nickname.trim().replace(/\u200B/g, '');
+    const nicknameEncoded = encodeURIComponent(nicknameClean);
+
     try {
       const ouidRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/id?nickname=${encodeURIComponent(nicknameClean)}`,
-        {
-          headers: {
-            ...headers,
-            'User-Agent': 'Mozilla/5.0',
-          },
-          httpsAgent: agent,
-        }
+        `https://open.api.nexon.com/fconline/v1/id?nickname=${nicknameEncoded}`,
+        { headers, httpsAgent: agent }
       );
-  
+
       const ouid = ouidRes.data.ouid;
-      if (!ouid) {
-        console.warn(`❌ [${nicknameClean}] ouid 없음`);
-        continue;
-      }
-  
+      if (!ouid) continue;
+
       const matchListRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/user/match?matchtype=52&ouid=${ouid}&offset=0&limit=1`,
+        'https://open.api.nexon.com/fconline/v1/user/match',
         {
+          params: { matchtype: 52, ouid, offset: 0, limit: 1 },
           headers,
-          httpsAgent: agent,
+          httpsAgent: agent
         }
       );
-  
       const matchId = matchListRes.data[0];
-      if (!matchId) {
-        console.warn(`❌ [${nicknameClean}] 매치 없음`);
-        continue;
+      if (!matchId) continue;
+
+      const matchDetailRes = await axios.get(
+        'https://open.api.nexon.com/fconline/v1/match-detail',
+        {
+          params: { matchid: matchId },
+          headers,
+          httpsAgent: agent
+        }
+      );
+      const matchInfo = matchDetailRes.data.matchInfo;
+
+      for (const info of matchInfo) {
+        if (info.ouid !== ouid) continue;
+        for (const player of info.player || []) {
+          if (player.spPosition === 28) continue;
+
+          const spId = player.spId;
+          const grade = player.spGrade;
+          const position = positionMap[player.spPosition] || `pos${player.spPosition}`;
+          const seasonId = parseInt(String(spId).slice(0, 3));
+          const name = spidMap[spId] || `(Unknown:${spId})`;
+          const season = seasonMap[seasonId] || `${seasonId}`;
+
+          userMatchResults.push({
+            nickname: user.nickname,
+            position,
+            name,
+            season,
+            grade
+          });
+        }
       }
-  
-      // ... 나머지 매치 상세 로직은 그대로
-    } catch (err: any) {
-      const status = err?.response?.status || '???';
-      const message = err?.response?.data?.error?.message || err.message;
-      console.warn(`유저 ${nicknameClean} 처리 오류: [${status}] ${message}`);
-      continue;
+    } catch (e: any) {
+      const msg = e?.response?.data?.error?.message || e?.message || e;
+      const status = e?.response?.status || '???';
+      console.warn(`유저 ${user.nickname} 처리 오류: [${status}] ${msg}`);
     }
   }
-  
 
   const positionGroups: Record<string, string[]> = {
     'CAM': ['CAM'],
