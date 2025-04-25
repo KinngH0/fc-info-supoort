@@ -16,6 +16,8 @@ export default function PickratePage() {
     setError(null);
 
     try {
+      console.log('요청 데이터:', { rankCount, teamFilter, topCount });
+
       const response = await fetch('/api/pickrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -26,13 +28,17 @@ export default function PickratePage() {
         })
       });
 
+      console.log('응답 상태:', response.status);
       const responseData = await response.json();
+      console.log('응답 데이터:', responseData);
+
       if (responseData.error) {
         setError(responseData.error);
       } else {
         setData(responseData);
       }
-    } catch {
+    } catch (err) {
+      console.error('에러:', err);
       setError('데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -99,6 +105,12 @@ export default function PickratePage() {
             </div>
           </form>
         </div>
+
+        {loading && (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded relative mb-4" role="alert">
