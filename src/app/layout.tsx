@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: {
-    default: 'FC INFO SUPPORT',
+    default: 'FC INFO SUPPORT - 메인',
     template: '%s | FC INFO SUPPORT',
   },
   description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
@@ -19,6 +19,8 @@ export const metadata: Metadata = {
     locale: 'ko_KR',
     url: 'https://fc-info-support.vercel.app',
     siteName: 'FC INFO SUPPORT',
+    title: 'FC INFO SUPPORT',
+    description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
   },
   twitter: {
     card: 'summary_large_image',

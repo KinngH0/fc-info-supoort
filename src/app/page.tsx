@@ -1,18 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Metadata } from 'next';
 import Script from 'next/script';
-
-export const metadata: Metadata = {
-  title: 'FC INFO SUPPORT - 메인',
-  description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
-  openGraph: {
-    title: 'FC INFO SUPPORT',
-    description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
-    type: 'website',
-  },
-};
 
 export default function Home() {
   const features = [
