@@ -48,7 +48,7 @@ export default function PickratePage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-10 px-4 relative pt-24">
+    <div className="max-w-7xl mx-auto py-10 px-4 relative pt-24">
       {loading && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center z-50 text-white">
           <svg className="animate-spin h-8 w-8 mb-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -120,26 +120,34 @@ export default function PickratePage() {
               <div key={positionGroup}>
                 <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-2">{positionGroup}</h2>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left border dark:border-gray-700">
+                  <table className="w-full text-sm text-left border dark:border-gray-700 table-fixed">
                     <thead className="bg-gray-100 dark:bg-gray-700">
                       <tr>
-                        <th className="px-3 py-2">순위</th>
-                        <th className="px-3 py-2">선수명</th>
-                        <th className="px-3 py-2">등장 횟수</th>
+                        <th className="px-3 py-2 w-[6rem]">순위</th>
+                        <th className="px-3 py-2 w-[14rem]">선수명</th>
+                        <th className="px-3 py-2 w-[8rem]">시즌</th>
+                        <th className="px-3 py-2 w-[8rem]">강화단계</th>
+                        <th className="px-3 py-2 w-[10rem]">픽률</th>
                         <th className="px-3 py-2">사용자</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(players as any[]).map((p, idx) => (
-                        <tr key={idx} className="border-t dark:border-gray-600">
-                          <td className="px-3 py-2">{idx + 1}위</td>
-                          <td className="px-3 py-2">{p.name}</td>
-                          <td className="px-3 py-2">{p.count}명</td>
-                          <td className="px-3 py-2 text-gray-500 dark:text-gray-400">
-                            {p.users.slice(0, 3).join(', ')}{p.users.length > 3 ? ` 외 ${p.users.length - 3}명` : ''}
-                          </td>
-                        </tr>
-                      ))}
+                      {(players as any[]).map((p, idx) => {
+                        const [namePart, seasonGrade] = p.name.split('(');
+                        const [season, gradePart] = seasonGrade?.replace(')', '').split('-') || ['', ''];
+                        return (
+                          <tr key={idx} className="border-t dark:border-gray-600">
+                            <td className="px-3 py-2">{idx + 1}위</td>
+                            <td className="px-3 py-2">{namePart?.trim()}</td>
+                            <td className="px-3 py-2">{season?.trim()}</td>
+                            <td className="px-3 py-2">{gradePart?.trim()}</td>
+                            <td className="px-3 py-2">{((p.count / result.userCount) * 100).toFixed(1)}% ({p.count}명)</td>
+                            <td className="px-3 py-2 text-gray-500 dark:text-gray-400">
+                              {p.users.slice(0, 3).join(', ')}{p.users.length > 3 ? ` 외 ${p.users.length - 3}명` : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
