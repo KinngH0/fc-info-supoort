@@ -6,10 +6,7 @@ import Header from '@/components/Header';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: {
-    default: 'FC INFO SUPPORT - 메인',
-    template: '%s | FC INFO SUPPORT',
-  },
+  title: 'FC INFO SUPPORT',
   description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
   keywords: ['FC 온라인', '픽률', '팀컬러', '통계', '분석'],
   authors: [{ name: 'FC INFO SUPPORT' }],
