@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Metadata } from 'next';
+import Script from 'next/script';
 
 export const metadata: Metadata = {
   title: 'FC 정보 지원 - 메인',
@@ -34,6 +35,24 @@ export default function Home() {
     <main className="min-h-screen px-4 py-10 pt-24">
       <div className="max-w-5xl mx-auto">
         <h1 className="sr-only">FC 정보 지원 메인 페이지</h1>
+        
+        {/* 상단 광고 */}
+        <div className="mb-8">
+          <ins
+            className="adsbygoogle"
+            style={{ display: 'block' }}
+            data-ad-client="ca-pub-1436343908093854"
+            data-ad-slot="1234567890"
+            data-ad-format="auto"
+            data-full-width-responsive="true"
+          />
+          <Script id="top-ad">
+            {`
+              (adsbygoogle = window.adsbygoogle || []).push({});
+            `}
+          </Script>
+        </div>
+
         <section 
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
           aria-label="서비스 메뉴"
@@ -54,6 +73,23 @@ export default function Home() {
             </Link>
           ))}
         </section>
+
+        {/* 하단 광고 */}
+        <div className="mt-8">
+          <ins
+            className="adsbygoogle"
+            style={{ display: 'block' }}
+            data-ad-client="ca-pub-1436343908093854"
+            data-ad-slot="0987654321"
+            data-ad-format="auto"
+            data-full-width-responsive="true"
+          />
+          <Script id="bottom-ad">
+            {`
+              (adsbygoogle = window.adsbygoogle || []).push({});
+            `}
+          </Script>
+        </div>
       </div>
     </main>
   );
