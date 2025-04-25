@@ -1,12 +1,6 @@
 // 📄 /src/app/api/pickrate/export/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
-import https from 'https'; // ✅ self-signed 인증서 무시용
-
-// 👇 인증서 검증 비활성화
-const agent = new https.Agent({
-  rejectUnauthorized: false,
-});
 
 export async function POST(req: NextRequest) {
   const { summary, userCount, teamColor } = await req.json();
