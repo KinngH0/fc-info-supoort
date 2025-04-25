@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 
 export default function PickratePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
-  const [sortStates, setSortStates] = useState<Record<string, { key: string; asc: boolean }>>({});
   const [rankCount, setRankCount] = useState<string>('100');
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [topCount, setTopCount] = useState<string>('5');
@@ -39,30 +38,6 @@ export default function PickratePage() {
       setLoading(false);
     }
   };
-
-  const toggleSort = useCallback((positionGroup: string, key: string) => {
-    setSortStates(prev => ({
-      ...prev,
-      [positionGroup]: {
-        key,
-        asc: prev[positionGroup]?.key === key ? !prev[positionGroup]?.asc : true
-      }
-    }));
-  }, []);
-
-  const sortedPlayers = useCallback((playerList: any[], positionGroup: string) => {
-    const sortState = sortStates[positionGroup];
-    if (!sortState?.key) return playerList;
-    
-    return [...playerList].sort((a, b) => {
-      const aVal = a[sortState.key];
-      const bVal = b[sortState.key];
-      if (typeof aVal === 'string') {
-        return sortState.asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      }
-      return sortState.asc ? aVal - bVal : bVal - aVal;
-    });
-  }, [sortStates]);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-[#171B26] py-8 px-4">
@@ -138,49 +113,48 @@ export default function PickratePage() {
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-[#1E2330]">
                     <tr>
-                      {Object.entries(data.summary).map(([positionGroup]) => (
-                        <th
-                          key={positionGroup}
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap border-x border-gray-200 dark:border-gray-700"
-                          style={{ width: getColumnWidth(positionGroup) }}
-                        >
-                          <button
-                            onClick={() => toggleSort(positionGroup, positionGroup)}
-                            className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-100"
-                          >
-                            <span>{positionGroup}</span>
-                            {sortStates[positionGroup]?.key === positionGroup && (
-                              <span>{sortStates[positionGroup]?.asc ? '↑' : '↓'}</span>
-                            )}
-                          </button>
-                        </th>
-                      ))}
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap border-x border-gray-200 dark:border-gray-700">
+                        순위
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap border-x border-gray-200 dark:border-gray-700">
+                        선수명
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap border-x border-gray-200 dark:border-gray-700">
+                        시즌
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap border-x border-gray-200 dark:border-gray-700">
+                        등급
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap border-x border-gray-200 dark:border-gray-700">
+                        픽률
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap border-x border-gray-200 dark:border-gray-700">
+                        사용자
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-[#1E2330] divide-y divide-gray-200 dark:divide-gray-700">
-                    {Object.entries(data.summary).map(([positionGroup]) => (
-                      sortedPlayers(data.summary[positionGroup] as any[], positionGroup).map((p: any, idx: number) => {
-                        const percent = ((p.count / data.userCount) * 100).toFixed(1);
-                        return (
-                          <tr key={`${positionGroup}-${idx}`} className="hover:bg-gray-50 dark:hover:bg-[#2A303C] transition-colors duration-150">
-                            {Object.entries(data.summary).map(([col]) => (
-                              <td
-                                key={`${positionGroup}-${idx}-${col}`}
-                                className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700 truncate"
-                                style={{ width: getColumnWidth(col) }}
-                              >
-                                {col === 'rank' && (idx + 1).toString()}
-                                {col === 'name' && p.name}
-                                {col === 'season' && p.season}
-                                {col === 'grade' && p.grade}
-                                {col === 'count' && `${percent}% (${p.count}명)`}
-                                {col === 'users' && p.users.slice(0, 3).join(', ')}{p.users.length > 3 ? ` 외 ${p.users.length - 3}명` : ''}
-                              </td>
-                            ))}
-                          </tr>
-                        );
-                      })
+                    {data.players?.map((player: any, index: number) => (
+                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-[#2A303C] transition-colors duration-150">
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {index + 1}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {player.name}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {player.season}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {player.grade}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {((player.count / data.userCount) * 100).toFixed(1)}% ({player.count}명)
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {player.users.slice(0, 3).join(', ')}{player.users.length > 3 ? ` 외 ${player.users.length - 3}명` : ''}
+                        </td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -191,16 +165,4 @@ export default function PickratePage() {
       </div>
     </div>
   );
-}
-
-function getColumnWidth(key: string): string {
-  switch (key) {
-    case 'rank': return '80px';
-    case 'name': return '150px';
-    case 'season': return '120px';
-    case 'grade': return '100px';
-    case 'count': return '120px';
-    case 'users': return '200px';
-    default: return 'auto';
-  }
 }
