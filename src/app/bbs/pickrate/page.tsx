@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function PickratePage() {
   const [loading, setLoading] = useState(false);
