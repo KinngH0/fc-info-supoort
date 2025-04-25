@@ -1,10 +1,13 @@
-// src/app/api/pickrate/route.ts
+// 📄 /src/app/api/pickrate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import https from 'https';
 
-const agent = new https.Agent({ rejectUnauthorized: false });
+// 👇 self-signed 인증서 무시 설정
+const agent = new https.Agent({
+  rejectUnauthorized: false,
+});
 
 export async function POST(req: NextRequest) {
   const { rankLimit, teamColor, topN } = await req.json();
@@ -17,7 +20,10 @@ export async function POST(req: NextRequest) {
 
   const fetchMeta = async (url: string) => {
     try {
-      const res = await axios.get(url, { headers, httpsAgent: agent });
+      const res = await axios.get(url, {
+        headers,
+        httpsAgent: agent,
+      });
       return res.data;
     } catch {
       return [];
@@ -67,7 +73,7 @@ export async function POST(req: NextRequest) {
       const ouidRes = await axios.get('https://open.api.nexon.com/fconline/v1/id', {
         headers,
         httpsAgent: agent,
-        params: { nickname: user.nickname },
+        params: { nickname: user.nickname.trim() },
         paramsSerializer: (params) => new URLSearchParams(params).toString(),
       });
       const ouid = ouidRes.data.ouid;
@@ -76,12 +82,7 @@ export async function POST(req: NextRequest) {
       const matchListRes = await axios.get('https://open.api.nexon.com/fconline/v1/user/match', {
         headers,
         httpsAgent: agent,
-        params: {
-          matchtype: 52,
-          ouid,
-          offset: 0,
-          limit: 1,
-        },
+        params: { ouid, matchtype: 52, offset: 0, limit: 1 },
         paramsSerializer: (params) => new URLSearchParams(params).toString(),
       });
       const matchId = matchListRes.data[0];
@@ -117,23 +118,20 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch (e: any) {
-      const status = e?.response?.status;
-      const message = e?.response?.data?.message || e?.message;
-      console.warn(`유저 ${user.nickname} 처리 오류: [${status}] ${message}`);
-      continue;
+      console.warn(`유저 ${user.nickname} 처리 오류: [${e.response?.status || '??'}]`, e.message);
     }
   }
 
   const positionGroups: Record<string, string[]> = {
-    "CAM": ["CAM"],
-    "RAM, LAM": ["RAM", "LAM"],
-    "RM, LM": ["RM", "LM"],
-    "CM": ["CM", "LCM", "RCM"],
-    "CDM": ["CDM", "LDM", "RDM"],
-    "LB": ["LB", "LWB"],
-    "CB": ["CB", "LCB", "RCB", "SW"],
-    "RB": ["RB", "RWB"],
-    "GK": ["GK"],
+    'CAM': ['CAM'],
+    'RAM, LAM': ['RAM', 'LAM'],
+    'RM, LM': ['RM', 'LM'],
+    'CM': ['CM', 'LCM', 'RCM'],
+    'CDM': ['CDM', 'LDM', 'RDM'],
+    'LB': ['LB', 'LWB'],
+    'CB': ['CB', 'LCB', 'RCB', 'SW'],
+    'RB': ['RB', 'RWB'],
+    'GK': ['GK'],
   };
 
   const summary: Record<string, any[]> = {};
