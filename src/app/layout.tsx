@@ -8,21 +8,21 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: {
-    default: 'FC 정보 지원',
-    template: '%s | FC 정보 지원',
+    default: 'FC INFO SUPPORT',
+    template: '%s | FC INFO SUPPORT',
   },
   description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
   keywords: ['FC 온라인', '픽률', '팀컬러', '통계', '분석'],
-  authors: [{ name: 'FC 정보 지원' }],
+  authors: [{ name: 'FC INFO SUPPORT' }],
   openGraph: {
     type: 'website',
     locale: 'ko_KR',
     url: 'https://fc-info-support.vercel.app',
-    siteName: 'FC 정보 지원',
+    siteName: 'FC INFO SUPPORT',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'FC 정보 지원',
+    title: 'FC INFO SUPPORT',
     description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
   },
   viewport: {
@@ -71,7 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </main>
           <footer className="py-6 text-center text-gray-600 dark:text-gray-400 text-sm">
-            <p>© {new Date().getFullYear()} FC 정보 지원. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} FC INFO SUPPORT. All rights reserved.</p>
           </footer>
         </div>
       </body>

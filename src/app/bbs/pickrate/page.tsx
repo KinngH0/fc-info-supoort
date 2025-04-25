@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 export default function PickratePage() {
   const [rankLimit, setRankLimit] = useState(100);
@@ -11,64 +11,114 @@ export default function PickratePage() {
   const [result, setResult] = useState<any>(null);
   const [sortKey, setSortKey] = useState<string>('');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
+  const [cacheKey, setCacheKey] = useState<string>('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // 캐시된 결과를 가져오는 함수
+  const getCachedResult = useCallback(async () => {
+    const key = `${rankLimit}-${teamColor}-${topN}`;
+    if (key === cacheKey && result) return result;
+
+    const cached = localStorage.getItem(`pickrate-${key}`);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      // 1시간 이내의 캐시만 사용
+      if (Date.now() - timestamp < 3600000) {
+        setResult(data);
+        setCacheKey(key);
+        return data;
+      }
+    }
+    return null;
+  }, [rankLimit, teamColor, topN, cacheKey, result]);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 캐시된 결과 확인
+    const cached = await getCachedResult();
+    if (cached) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setProgress(0);
     setResult(null);
 
-    const jobRes = await fetch('/api/pickrate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rankLimit, teamColor, topN })
-    });
+    try {
+      const jobRes = await fetch('/api/pickrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rankLimit, teamColor, topN })
+      });
 
-    const { jobId } = await jobRes.json();
+      const { jobId } = await jobRes.json();
 
-    const interval = setInterval(async () => {
-      const res = await fetch(`/api/pickrate?jobId=${jobId}`);
-      const data = await res.json();
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/pickrate?jobId=${jobId}`);
+          const data = await res.json();
 
-      if (data.progress !== undefined) setProgress(data.progress);
-      if (data.done) {
-        clearInterval(interval);
-        setResult(data.result);
-        setLoading(false);
-      }
-    }, 3000);
-  };
+          if (data.progress !== undefined) setProgress(data.progress);
+          if (data.done) {
+            clearInterval(interval);
+            setResult(data.result);
+            setLoading(false);
+            
+            // 결과 캐싱
+            const key = `${rankLimit}-${teamColor}-${topN}`;
+            localStorage.setItem(`pickrate-${key}`, JSON.stringify({
+              data: data.result,
+              timestamp: Date.now()
+            }));
+            setCacheKey(key);
+          }
+        } catch (error) {
+          console.error('Error fetching progress:', error);
+          clearInterval(interval);
+          setLoading(false);
+        }
+      }, 2000); // 3초에서 2초로 간격 줄임
+    } catch (error) {
+      console.error('Error submitting job:', error);
+      setLoading(false);
+    }
+  }, [rankLimit, teamColor, topN, getCachedResult]);
 
-  const handleExport = async () => {
+  const handleExport = useCallback(async () => {
     if (!result) return;
-    const res = await fetch('/api/pickrate/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        summary: result.summary,
-        userCount: result.userCount,
-        teamColor
-      })
-    });
+    try {
+      const res = await fetch('/api/pickrate/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          summary: result.summary,
+          userCount: result.userCount,
+          teamColor
+        })
+      });
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'pickrate_report.xlsx';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'pickrate_report.xlsx';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+    }
+  }, [result, teamColor]);
 
-  const toggleSort = (key: string) => {
+  const toggleSort = useCallback((key: string) => {
     if (sortKey === key) setSortAsc(!sortAsc);
     else {
       setSortKey(key);
       setSortAsc(true);
     }
-  };
+  }, [sortKey, sortAsc]);
 
-  const sortedPlayers = (players: any[]) => {
+  const sortedPlayers = useCallback((players: any[]) => {
     if (!sortKey) return players;
     return [...players].sort((a, b) => {
       const aVal = a[sortKey];
@@ -76,7 +126,12 @@ export default function PickratePage() {
       if (typeof aVal === 'string') return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       return sortAsc ? aVal - bVal : bVal - aVal;
     });
-  };
+  }, [sortKey, sortAsc]);
+
+  // 폼 입력값 변경 핸들러
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, setter: (value: any) => void) => {
+    setter(e.target.value);
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto py-10 px-4 relative pt-24">
@@ -104,8 +159,10 @@ export default function PickratePage() {
             type="number"
             className="w-full p-2 rounded border dark:bg-gray-700"
             value={rankLimit}
-            onChange={(e) => setRankLimit(Number(e.target.value))}
+            onChange={(e) => handleInputChange(e, setRankLimit)}
             required
+            min="1"
+            max="1000"
           />
         </div>
 
@@ -115,7 +172,7 @@ export default function PickratePage() {
             type="text"
             className="w-full p-2 rounded border dark:bg-gray-700"
             value={teamColor}
-            onChange={(e) => setTeamColor(e.target.value)}
+            onChange={(e) => handleInputChange(e, setTeamColor)}
             required
           />
         </div>
@@ -126,16 +183,19 @@ export default function PickratePage() {
             type="number"
             className="w-full p-2 rounded border dark:bg-gray-700"
             value={topN}
-            onChange={(e) => setTopN(Number(e.target.value))}
+            onChange={(e) => handleInputChange(e, setTopN)}
             required
+            min="1"
+            max="20"
           />
         </div>
 
         <button
           type="submit"
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded"
+          disabled={loading}
         >
-          조회하기
+          {loading ? '조회 중...' : '조회하기'}
         </button>
       </form>
 

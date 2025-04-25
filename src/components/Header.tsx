@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import DarkModeToggle from './DarkModeToggle';
 
@@ -15,10 +16,17 @@ const Header = () => {
             <div className="flex-shrink-0 flex items-center">
               <Link
                 href="/"
-                className="text-xl font-bold text-gray-800 dark:text-white hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                className="flex items-center space-x-2 text-xl font-bold text-gray-800 dark:text-white hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
                 aria-label="홈으로 이동"
               >
-                FC 정보 지원
+                <Image
+                  src="/logo.png"
+                  alt="FC INFO SUPPORT 로고"
+                  width={32}
+                  height={32}
+                  className="rounded-lg"
+                />
+                <span>FC INFO SUPPORT</span>
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
