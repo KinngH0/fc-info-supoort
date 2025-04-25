@@ -1,3 +1,4 @@
+// 📄 /src/app/api/teamcolor/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 import axios from 'axios';
@@ -38,7 +39,7 @@ async function processTeamColorData(jobId: string, rankLimit: number, topN: numb
     const allUsers: any[] = [];
 
     for (let page = 1; page <= totalPages; page++) {
-      await delay(200); // 딜레이 추가로 Vercel 타임아웃 방지
+      await delay(200); // Vercel 타임아웃 방지용 딜레이
 
       const url = `https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`;
       const res = await axios.get(url, {
@@ -67,14 +68,13 @@ async function processTeamColorData(jobId: string, rankLimit: number, topN: numb
         });
       });
 
-      // ✅ 진행률 저장
+      if (allUsers.length >= rankLimit) break;
+
       const progress = Math.min(100, Math.round((page / totalPages) * 100));
       const prev = jobStore.get(jobId);
       if (prev) {
         jobStore.set(jobId, { ...prev, progress });
       }
-
-      if (allUsers.length >= rankLimit) break;
     }
 
     const limitedUsers = allUsers.slice(0, rankLimit);

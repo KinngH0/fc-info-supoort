@@ -1,3 +1,4 @@
+// 📄 /src/app/bbs/teamcolor/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,10 +8,10 @@ export default function TeamColorPage() {
   const [rankLimit, setRankLimit] = useState(10000);
   const [topN, setTopN] = useState(5);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
   const [jobId, setJobId] = useState<string>('');
   const [error, setError] = useState<string>('');
-  const [progress, setProgress] = useState<number>(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,31 +34,24 @@ export default function TeamColorPage() {
       setError('작업 시작 실패');
       return;
     }
-  };
-
-  useEffect(() => {
-    if (!jobId) return;
 
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/teamcolor?jobId=${jobId}`);
+      const res = await fetch(`/api/teamcolor?jobId=${id}`);
       const data = await res.json();
+
+      if (data.progress !== undefined) setProgress(data.progress);
 
       if (data.status === 'completed') {
         setResult(data.result);
         setLoading(false);
-        setProgress(100);
         clearInterval(interval);
       } else if (data.status === 'error') {
         setError('데이터 처리 실패: ' + (data.message || ''));
         setLoading(false);
         clearInterval(interval);
-      } else {
-        if (data.progress) setProgress(data.progress);
       }
     }, 2000);
-
-    return () => clearInterval(interval);
-  }, [jobId]);
+  };
 
   return (
     <div className="max-w-5xl mx-auto py-10 px-4 relative pt-24">
@@ -84,8 +78,6 @@ export default function TeamColorPage() {
             />
           </svg>
           <p className="text-lg font-semibold mb-4">팀컬러 분석 중입니다...</p>
-
-          {/* ✅ 진행률 바 */}
           <div className="w-full max-w-sm h-4 bg-gray-700 rounded overflow-hidden">
             <div
               className="h-full bg-blue-500 transition-all duration-300 ease-out"

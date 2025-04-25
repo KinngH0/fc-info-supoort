@@ -1,22 +1,27 @@
+// 📄 /src/app/bbs/pickrate/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function PickratePage() {
   const [rankLimit, setRankLimit] = useState(100);
   const [teamColor, setTeamColor] = useState('all');
   const [topN, setTopN] = useState(5);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<string>('');
+  const [sortAsc, setSortAsc] = useState<boolean>(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setProgress(0);
     setResult(null);
     setJobId(null);
 
-    const jobRes = await fetch('/api/pickrate/job', {
+    const jobRes = await fetch('/api/pickrate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rankLimit, teamColor, topN })
@@ -26,8 +31,11 @@ export default function PickratePage() {
     setJobId(newJobId);
 
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/pickrate/status?jobId=${newJobId}`);
+      const res = await fetch(`/api/pickrate?jobId=${newJobId}`);
       const data = await res.json();
+
+      if (data.progress !== undefined) setProgress(data.progress);
+
       if (data.done) {
         clearInterval(interval);
         setResult(data.result);
@@ -58,15 +66,56 @@ export default function PickratePage() {
     URL.revokeObjectURL(url);
   };
 
+  const toggleSort = (key: string) => {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else {
+      setSortKey(key);
+      setSortAsc(true);
+    }
+  };
+
+  const sortedPlayers = (players: any[]) => {
+    if (!sortKey) return players;
+    return [...players].sort((a, b) => {
+      const aVal = a[sortKey];
+      const bVal = b[sortKey];
+      if (typeof aVal === 'string') return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      return sortAsc ? aVal - bVal : bVal - aVal;
+    });
+  };
+
   return (
     <div className="max-w-5xl mx-auto py-10 px-4 relative pt-24">
       {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center z-50 text-white">
-          <svg className="animate-spin h-8 w-8 mb-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center z-50 text-white px-6">
+          <svg
+            className="animate-spin h-8 w-8 mb-4 text-white"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v8z"
+            />
           </svg>
-          <p className="text-lg font-semibold">조회 중입니다. 잠시만 기다려주세요...</p>
+          <p className="text-lg font-semibold mb-4">조회 중입니다. 잠시만 기다려주세요...</p>
+          <div className="w-full max-w-sm h-4 bg-gray-700 rounded overflow-hidden">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+          <p className="mt-2 text-sm text-gray-300">{progress}% 완료</p>
         </div>
       )}
 
@@ -134,25 +183,31 @@ export default function PickratePage() {
                   <table className="w-full text-sm text-left border dark:border-gray-700 table-fixed">
                     <thead className="bg-gray-100 dark:bg-gray-700">
                       <tr>
-                        <th className="px-3 py-2 w-12">순위</th>
-                        <th className="px-3 py-2 w-48">선수명</th>
-                        <th className="px-3 py-2 w-28">시즌</th>
-                        <th className="px-3 py-2 w-24">강화단계</th>
-                        <th className="px-3 py-2 w-32">픽률</th>
-                        <th className="px-3 py-2 w-64">사용자</th>
+                        {['순위', '선수명', '시즌', '강화단계', '픽률'].map((label, index) => {
+                          const keys = ['rank', 'name', 'season', 'grade', 'count'];
+                          return (
+                            <th
+                              key={index}
+                              className="px-3 py-2 cursor-pointer"
+                              onClick={() => toggleSort(keys[index])}
+                            >
+                              {label}
+                              {sortKey === keys[index] && (sortAsc ? ' 🔼' : ' 🔽')}
+                            </th>
+                          );
+                        })}
+                        <th className="px-3 py-2">사용자</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(players as any[]).map((p, idx) => {
-                        const [name, seasonAndGrade] = p.name.split(' - ');
-                        const [season, gradeStr] = seasonAndGrade?.match(/\((.*?)\)/)?.[1]?.split(') ') || ['-', '-'];
+                      {sortedPlayers(players as any[]).map((p, idx) => {
                         const percent = ((p.count / result.userCount) * 100).toFixed(1);
                         return (
                           <tr key={idx} className="border-t dark:border-gray-600">
                             <td className="px-3 py-2">{idx + 1}위</td>
-                            <td className="px-3 py-2">{name}</td>
-                            <td className="px-3 py-2">{season}</td>
-                            <td className="px-3 py-2">{gradeStr}</td>
+                            <td className="px-3 py-2">{p.name}</td>
+                            <td className="px-3 py-2">{p.season}</td>
+                            <td className="px-3 py-2">{p.grade}</td>
                             <td className="px-3 py-2">{percent}% ({p.count}명)</td>
                             <td className="px-3 py-2 text-gray-500 dark:text-gray-400">
                               {p.users.slice(0, 3).join(', ')}{p.users.length > 3 ? ` 외 ${p.users.length - 3}명` : ''}
