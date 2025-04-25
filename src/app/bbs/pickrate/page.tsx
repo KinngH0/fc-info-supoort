@@ -9,8 +9,7 @@ export default function PickratePage() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
-  const [sortKey, setSortKey] = useState<string>('');
-  const [sortAsc, setSortAsc] = useState<boolean>(true);
+  const [sortStates, setSortStates] = useState<Record<string, { key: string; asc: boolean }>>({});
   const [cacheKey, setCacheKey] = useState<string>('');
 
   // 캐시된 결과를 가져오는 함수
@@ -110,23 +109,29 @@ export default function PickratePage() {
     }
   }, [result, teamColor]);
 
-  const toggleSort = useCallback((key: string) => {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else {
-      setSortKey(key);
-      setSortAsc(true);
-    }
-  }, [sortKey, sortAsc]);
+  const toggleSort = useCallback((positionGroup: string, key: string) => {
+    setSortStates(prev => ({
+      ...prev,
+      [positionGroup]: {
+        key,
+        asc: prev[positionGroup]?.key === key ? !prev[positionGroup]?.asc : true
+      }
+    }));
+  }, []);
 
-  const sortedPlayers = useCallback((players: any[]) => {
-    if (!sortKey) return players;
+  const sortedPlayers = useCallback((players: any[], positionGroup: string) => {
+    const sortState = sortStates[positionGroup];
+    if (!sortState?.key) return players;
+    
     return [...players].sort((a, b) => {
-      const aVal = a[sortKey];
-      const bVal = b[sortKey];
-      if (typeof aVal === 'string') return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      return sortAsc ? aVal - bVal : bVal - aVal;
+      const aVal = a[sortState.key];
+      const bVal = b[sortState.key];
+      if (typeof aVal === 'string') {
+        return sortState.asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return sortState.asc ? aVal - bVal : bVal - aVal;
     });
-  }, [sortKey, sortAsc]);
+  }, [sortStates]);
 
   // 폼 입력값 변경 핸들러
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, setter: (value: any) => void) => {
@@ -218,24 +223,26 @@ export default function PickratePage() {
                   <table className="w-full text-sm text-left border dark:border-gray-700">
                     <thead className="bg-gray-100 dark:bg-gray-700">
                       <tr>
-                        {['순위', '선수명', '시즌', '강화단계', '픽률'].map((label, index) => {
-                          const keys = ['rank', 'name', 'season', 'grade', 'count'];
-                          return (
-                            <th
-                              key={index}
-                              className="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                              onClick={() => toggleSort(keys[index])}
-                            >
-                              {label}
-                              {sortKey === keys[index] && (sortAsc ? ' 🔼' : ' 🔽')}
-                            </th>
-                          );
-                        })}
+                        <th className="px-3 py-2 w-20" onClick={() => toggleSort(positionGroup, 'rank')}>
+                          순위 {sortStates[positionGroup]?.key === 'rank' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
+                        </th>
+                        <th className="px-3 py-2 w-32" onClick={() => toggleSort(positionGroup, 'name')}>
+                          선수명 {sortStates[positionGroup]?.key === 'name' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
+                        </th>
+                        <th className="px-3 py-2 w-32" onClick={() => toggleSort(positionGroup, 'season')}>
+                          시즌 {sortStates[positionGroup]?.key === 'season' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
+                        </th>
+                        <th className="px-3 py-2 w-24" onClick={() => toggleSort(positionGroup, 'grade')}>
+                          강화단계 {sortStates[positionGroup]?.key === 'grade' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
+                        </th>
+                        <th className="px-3 py-2 w-32" onClick={() => toggleSort(positionGroup, 'count')}>
+                          픽률 {sortStates[positionGroup]?.key === 'count' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
+                        </th>
                         <th className="px-3 py-2">사용자</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedPlayers(players as any[]).map((p, idx) => {
+                      {sortedPlayers(players as any[], positionGroup).map((p, idx) => {
                         const percent = ((p.count / result.userCount) * 100).toFixed(1);
                         return (
                           <tr key={idx} className="border-t dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">

@@ -41,40 +41,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" suppressHydrationWarning>
+    <html lang="ko" suppressHydrationWarning className="bg-[#171B26]">
       <head>
         <link rel="icon" href="/favicon.ico" />
-        <Script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1436343908093854"
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function () {
-                try {
-                  const theme = localStorage.getItem('theme');
-                  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                  if (theme === 'dark' || (!theme && prefersDark)) {
-                    document.documentElement.classList.add('dark');
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                  }
-                } catch (_) {}
-              })();
-            `,
-          }}
-        />
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1436343908093854" crossOrigin="anonymous" />
       </head>
-      <body className={`${inter.className} bg-gray-50 dark:bg-gray-900 transition-colors duration-200`}>
+      <body className={`${inter.className} bg-[#171B26] text-white`}>
         <div className="min-h-screen flex flex-col">
           <Header />
           <main className="flex-grow">
             {children}
           </main>
-          <footer className="py-6 text-center text-gray-600 dark:text-gray-400 text-sm">
+          <footer className="py-6 text-center text-gray-400 text-sm">
             <p>© {new Date().getFullYear()} FC INFO SUPPORT. All rights reserved.</p>
           </footer>
         </div>
