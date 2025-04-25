@@ -4,7 +4,6 @@ import { useState } from 'react';
 
 export default function TeamColorPage() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
   const [startRank, setStartRank] = useState<number>(1);
   const [endRank, setEndRank] = useState<number>(100);
@@ -12,7 +11,6 @@ export default function TeamColorPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
     try {
       const response = await fetch('/api/teamcolor', {
@@ -23,12 +21,12 @@ export default function TeamColorPage() {
 
       const responseData = await response.json();
       if (responseData.error) {
-        setError(responseData.error);
+        alert(responseData.error);
       } else {
         setData(responseData);
       }
     } catch {
-      setError('데이터를 불러오는 중 오류가 발생했습니다.');
+      alert('데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -92,12 +90,6 @@ export default function TeamColorPage() {
             </div>
           </form>
         </div>
-
-        {error && (
-          <div className="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-200 px-4 py-3 rounded-lg mb-8">
-            {error}
-          </div>
-        )}
 
         {data && (
           <div className="overflow-x-auto">

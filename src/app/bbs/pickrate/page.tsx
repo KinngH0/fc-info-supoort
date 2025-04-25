@@ -8,12 +8,10 @@ export default function PickratePage() {
   const [sortStates, setSortStates] = useState<Record<string, { key: string; asc: boolean }>>({});
   const [startRank, setStartRank] = useState<number>(1);
   const [endRank, setEndRank] = useState<number>(100);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
     try {
       const response = await fetch('/api/pickrate', {
@@ -24,12 +22,12 @@ export default function PickratePage() {
 
       const data = await response.json();
       if (data.error) {
-        setError(data.error);
+        alert(data.error);
       } else {
         setResult(data);
       }
     } catch {
-      setError('데이터를 불러오는 중 오류가 발생했습니다.');
+      alert('데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -117,12 +115,6 @@ export default function PickratePage() {
             </div>
           </form>
         </div>
-
-        {error && (
-          <div className="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-200 px-4 py-3 rounded-lg mb-8">
-            {error}
-          </div>
-        )}
 
         {result && (
           <div className="overflow-x-auto">
