@@ -4,10 +4,7 @@ import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import https from 'https';
 
-// 👇 self-signed 인증서 무시 설정
-const agent = new https.Agent({
-  rejectUnauthorized: false,
-});
+const agent = new https.Agent({ rejectUnauthorized: false });
 
 export async function POST(req: NextRequest) {
   const { rankLimit, teamColor, topN } = await req.json();
@@ -28,9 +25,9 @@ export async function POST(req: NextRequest) {
   };
 
   const [spidData, seasonData, positionData] = await Promise.all([
-    fetchMeta("https://open.api.nexon.com/static/fconline/meta/spid.json"),
-    fetchMeta("https://open.api.nexon.com/static/fconline/meta/seasonid.json"),
-    fetchMeta("https://open.api.nexon.com/static/fconline/meta/spposition.json")
+    fetchMeta('https://open.api.nexon.com/static/fconline/meta/spid.json'),
+    fetchMeta('https://open.api.nexon.com/static/fconline/meta/seasonid.json'),
+    fetchMeta('https://open.api.nexon.com/static/fconline/meta/spposition.json')
   ]);
 
   spidData.forEach((item: any) => (spidMap[item.id] = item.name));
@@ -52,8 +49,8 @@ export async function POST(req: NextRequest) {
         const teamTag = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
         if (!nameTag || !teamTag) return;
         const nickname = nameTag.textContent.trim();
-        const teamColor = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
-        if (normalizedFilter === 'all' || teamColor.includes(normalizedFilter)) {
+        const team = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
+        if (normalizedFilter === 'all' || team.includes(normalizedFilter)) {
           rankedUsers.push({ nickname, rank });
         }
         rank++;
@@ -68,43 +65,35 @@ export async function POST(req: NextRequest) {
   for (const user of rankedUsers) {
     try {
       const ouidRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/id`,
+        'https://open.api.nexon.com/fconline/v1/id',
         {
+          params: { nickname: user.nickname },
           headers,
-          httpsAgent: agent,
-          params: { nickname: user.nickname }, // ✅ 인코딩 없이 전달
+          httpsAgent: agent
         }
       );
-
       const ouid = ouidRes.data.ouid;
       if (!ouid) continue;
 
       const matchListRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/user/match`,
+        'https://open.api.nexon.com/fconline/v1/user/match',
         {
+          params: { matchtype: 52, ouid, offset: 0, limit: 1 },
           headers,
-          httpsAgent: agent,
-          params: {
-            matchtype: 52,
-            ouid,
-            offset: 0,
-            limit: 1,
-          },
+          httpsAgent: agent
         }
       );
-
       const matchId = matchListRes.data[0];
       if (!matchId) continue;
 
       const matchDetailRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/match-detail`,
+        'https://open.api.nexon.com/fconline/v1/match-detail',
         {
-          headers,
-          httpsAgent: agent,
           params: { matchid: matchId },
+          headers,
+          httpsAgent: agent
         }
       );
-
       const matchInfo = matchDetailRes.data.matchInfo;
 
       for (const info of matchInfo) {
@@ -124,28 +113,26 @@ export async function POST(req: NextRequest) {
             position,
             name,
             season,
-            grade,
+            grade
           });
         }
       }
     } catch (e: any) {
-      const status = e?.response?.status;
-      const message = e?.response?.data?.error?.message || e.message;
-      console.warn(`유저 ${user.nickname} 처리 오류: [${status}] ${message}`);
-      continue;
+      const msg = e?.response?.data?.error?.message || e?.message || e;
+      console.warn(`유저 ${user.nickname} 처리 오류: [${e?.response?.status || '??'}] ${msg}`);
     }
   }
 
   const positionGroups: Record<string, string[]> = {
-    "CAM": ["CAM"],
-    "RAM, LAM": ["RAM", "LAM"],
-    "RM, LM": ["RM", "LM"],
-    "CM": ["CM", "LCM", "RCM"],
-    "CDM": ["CDM", "LDM", "RDM"],
-    "LB": ["LB", "LWB"],
-    "CB": ["CB", "LCB", "RCB", "SW"],
-    "RB": ["RB", "RWB"],
-    "GK": ["GK"],
+    'CAM': ['CAM'],
+    'RAM, LAM': ['RAM', 'LAM'],
+    'RM, LM': ['RM', 'LM'],
+    'CM': ['CM', 'LCM', 'RCM'],
+    'CDM': ['CDM', 'LDM', 'RDM'],
+    'LB': ['LB', 'LWB'],
+    'CB': ['CB', 'LCB', 'RCB', 'SW'],
+    'RB': ['RB', 'RWB'],
+    'GK': ['GK']
   };
 
   const summary: Record<string, any[]> = {};
@@ -157,9 +144,7 @@ export async function POST(req: NextRequest) {
 
     for (const p of filtered) {
       const key = `${p.name} (${p.season}) - ${p.grade}카`;
-      if (!grouped[key]) {
-        grouped[key] = { count: 0, users: [] };
-      }
+      if (!grouped[key]) grouped[key] = { count: 0, users: [] };
       grouped[key].count++;
       grouped[key].users.push(p.nickname);
     }
@@ -175,6 +160,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     userCount: userSet.size,
     topN,
-    summary,
+    summary
   });
 }
