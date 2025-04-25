@@ -4,10 +4,7 @@ import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import https from 'https';
 
-// 👇 self-signed 인증서 무시 설정
-const agent = new https.Agent({
-  rejectUnauthorized: false,
-});
+const agent = new https.Agent({ rejectUnauthorized: false });
 
 export async function POST(req: NextRequest) {
   const { rankLimit, teamColor, topN } = await req.json();
@@ -25,7 +22,8 @@ export async function POST(req: NextRequest) {
         httpsAgent: agent,
       });
       return res.data;
-    } catch {
+    } catch (err: any) {
+      console.warn('⚠️ 메타데이터 로딩 실패:', err.message);
       return [];
     }
   };
@@ -70,29 +68,26 @@ export async function POST(req: NextRequest) {
 
   for (const user of rankedUsers) {
     try {
-      const ouidRes = await axios.get('https://open.api.nexon.com/fconline/v1/id', {
+      const ouidRes = await axios.get(`https://open.api.nexon.com/fconline/v1/id`, {
         headers,
         httpsAgent: agent,
-        params: { nickname: user.nickname.trim() },
-        paramsSerializer: (params) => new URLSearchParams(params).toString(),
+        params: { nickname: encodeURIComponent(user.nickname) },
       });
       const ouid = ouidRes.data.ouid;
       if (!ouid) continue;
 
-      const matchListRes = await axios.get('https://open.api.nexon.com/fconline/v1/user/match', {
+      const matchListRes = await axios.get(`https://open.api.nexon.com/fconline/v1/user/match`, {
         headers,
         httpsAgent: agent,
         params: { ouid, matchtype: 52, offset: 0, limit: 1 },
-        paramsSerializer: (params) => new URLSearchParams(params).toString(),
       });
       const matchId = matchListRes.data[0];
       if (!matchId) continue;
 
-      const matchDetailRes = await axios.get('https://open.api.nexon.com/fconline/v1/match-detail', {
+      const matchDetailRes = await axios.get(`https://open.api.nexon.com/fconline/v1/match-detail`, {
         headers,
         httpsAgent: agent,
         params: { matchid: matchId },
-        paramsSerializer: (params) => new URLSearchParams(params).toString(),
       });
       const matchInfo = matchDetailRes.data.matchInfo;
 
@@ -118,7 +113,9 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch (e: any) {
-      console.warn(`유저 ${user.nickname} 처리 오류: [${e.response?.status || '??'}]`, e.message);
+      const status = e?.response?.status || '??';
+      const resData = e?.response?.data || '(no response data)';
+      console.warn(`유저 ${user.nickname} 처리 오류: [${status}]`, resData);
     }
   }
 
