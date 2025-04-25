@@ -4,7 +4,6 @@ import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import https from 'https';
 
-// ✅ self-signed 인증서 무시 설정 (Vercel 등 서버 환경 대응)
 const agent = new https.Agent({
   rejectUnauthorized: false,
 });
@@ -18,7 +17,6 @@ export async function POST(req: NextRequest) {
   const seasonMap: Record<number, string> = {};
   const positionMap: Record<number, string> = {};
 
-  // ✅ 메타데이터 요청 (선수, 시즌, 포지션)
   const fetchMeta = async (url: string) => {
     try {
       const res = await axios.get(url, { headers, httpsAgent: agent });
@@ -92,7 +90,7 @@ export async function POST(req: NextRequest) {
       for (const info of matchInfo) {
         if (info.ouid !== ouid) continue;
         for (const player of info.player || []) {
-          if (player.spPosition === 28) continue; // 제외 포지션
+          if (player.spPosition === 28) continue;
 
           const spId = player.spId;
           const grade = player.spGrade;
@@ -110,8 +108,9 @@ export async function POST(req: NextRequest) {
           });
         }
       }
-    } catch (e) {
-      console.warn(`유저 ${user.nickname} 처리 오류`, e?.response?.status || e.message);
+    } catch (e: any) {
+      const status = e?.response?.status || e?.message || 'Unknown error';
+      console.warn(`유저 ${user.nickname} 처리 오류`, status);
       continue;
     }
   }
