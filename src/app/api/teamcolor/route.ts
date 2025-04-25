@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 import axios from 'axios';
+import { Agent as HttpAgent } from 'http';
+import { Agent as HttpsAgent } from 'https';
 
 // 캐시 설정 (2시간으로 증가)
 const CACHE_DURATION = 2 * 60 * 60 * 1000;
@@ -34,8 +36,8 @@ const axiosInstance = axios.create({
     'Connection': 'keep-alive',
   },
   timeout: 30000, // 30초로 증가
-  httpAgent: new (require('http').Agent)({ keepAlive: true }),
-  httpsAgent: new (require('https').Agent)({ keepAlive: true })
+  httpAgent: new HttpAgent({ keepAlive: true }),
+  httpsAgent: new HttpsAgent({ keepAlive: true })
 });
 
 // 재시도 로직이 포함된 페이지 데이터 가져오기
