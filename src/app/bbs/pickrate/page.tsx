@@ -1,13 +1,11 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function PickratePage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [sortStates, setSortStates] = useState<Record<string, { key: string; asc: boolean }>>({});
-  const [cacheKey, setCacheKey] = useState<string>('');
   const [startRank, setStartRank] = useState<number>(1);
   const [endRank, setEndRank] = useState<number>(100);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +28,7 @@ export default function PickratePage() {
       } else {
         setResult(data);
       }
-    } catch (err) {
+    } catch {
       setError('데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -133,7 +131,7 @@ export default function PickratePage() {
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-[#1E2330]">
                     <tr>
-                      {Object.entries(result.summary).map(([positionGroup, players]) => (
+                      {Object.entries(result.summary).map(([positionGroup]) => (
                         <th
                           key={positionGroup}
                           scope="col"
@@ -154,12 +152,12 @@ export default function PickratePage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-[#1E2330] divide-y divide-gray-200 dark:divide-gray-700">
-                    {Object.entries(result.summary).map(([positionGroup, players]) => (
-                      sortedPlayers(players as any[], positionGroup).map((p: any, idx: number) => {
+                    {Object.entries(result.summary).map(([positionGroup]) => (
+                      sortedPlayers(result.summary[positionGroup] as any[], positionGroup).map((p: any, idx: number) => {
                         const percent = ((p.count / result.userCount) * 100).toFixed(1);
                         return (
                           <tr key={`${positionGroup}-${idx}`} className="hover:bg-gray-50 dark:hover:bg-[#2A303C] transition-colors duration-150">
-                            {Object.entries(result.summary).map(([col, _]) => (
+                            {Object.entries(result.summary).map(([col]) => (
                               <td
                                 key={`${positionGroup}-${idx}-${col}`}
                                 className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700 truncate"
