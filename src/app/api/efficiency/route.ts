@@ -22,7 +22,8 @@ async function getOuid(nickname: string): Promise<string> {
       `https://open.api.nexon.com/fconline/v1/id?nickname=${encodeURIComponent(nickname)}`,
       {
         headers: {
-          'x-nxopen-api-key': API_KEY
+          'x-nxopen-api-key': API_KEY,
+          'accept': 'application/json'
         }
       }
     );
@@ -33,13 +34,14 @@ async function getOuid(nickname: string): Promise<string> {
 
     return response.data.ouid;
   } catch (error: any) {
+    console.error('Error in getOuid:', error.response?.data || error.message);
     if (error.response?.status === 404) {
       throw new Error('존재하지 않는 닉네임입니다.');
     }
     if (error.response?.status === 429) {
       throw new Error('API 호출 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
     }
-    throw new Error('유저 정보를 가져오지 못했습니다: ' + (error.response?.data?.message || error.message));
+    throw new Error(error.response?.data?.message || '유저 정보를 가져오지 못했습니다.');
   }
 }
 
@@ -49,21 +51,24 @@ async function getMatchIds(offset: number = 0): Promise<string[]> {
       `https://open.api.nexon.com/fconline/v1/match?matchtype=52&offset=${offset}&limit=100&orderby=desc`,
       {
         headers: {
-          'x-nxopen-api-key': API_KEY
+          'x-nxopen-api-key': API_KEY,
+          'accept': 'application/json'
         }
       }
     );
 
     if (!Array.isArray(response.data)) {
+      console.error('Unexpected match list response:', response.data);
       throw new Error('매치 데이터 형식이 올바르지 않습니다.');
     }
 
     return response.data;
   } catch (error: any) {
+    console.error('Error in getMatchIds:', error.response?.data || error.message);
     if (error.response?.status === 429) {
       throw new Error('API 호출 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
     }
-    throw new Error('매치 목록을 가져오지 못했습니다: ' + (error.response?.data?.message || error.message));
+    throw new Error(error.response?.data?.message || '매치 목록을 가져오지 못했습니다.');
   }
 }
 
@@ -73,17 +78,19 @@ async function getMatchDetail(matchId: string): Promise<MatchDetail> {
       `https://open.api.nexon.com/fconline/v1/match-detail?matchid=${matchId}`,
       {
         headers: {
-          'x-nxopen-api-key': API_KEY
+          'x-nxopen-api-key': API_KEY,
+          'accept': 'application/json'
         }
       }
     );
 
     return response.data;
   } catch (error: any) {
+    console.error('Error in getMatchDetail:', error.response?.data || error.message);
     if (error.response?.status === 429) {
       throw new Error('API 호출 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
     }
-    throw new Error('매치 상세 정보를 가져오지 못했습니다: ' + (error.response?.data?.message || error.message));
+    throw new Error(error.response?.data?.message || '매치 상세 정보를 가져오지 못했습니다.');
   }
 }
 
@@ -97,7 +104,8 @@ function isSameDay(date1: Date, date2: Date): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    const { nickname, date } = await req.json();
+    const body = await req.json();
+    const { nickname, date } = body;
 
     if (!nickname || !date) {
       return NextResponse.json(
@@ -147,22 +155,27 @@ export async function POST(req: NextRequest) {
 
         // 각 매치의 상세 정보 조회
         for (const matchId of matchIds) {
-          const matchDetail = await getMatchDetail(matchId);
-          const matchDate = new Date(matchDetail.matchDate);
-          oldestMatchDate = matchDate;
+          try {
+            const matchDetail = await getMatchDetail(matchId);
+            const matchDate = new Date(matchDetail.matchDate);
+            oldestMatchDate = matchDate;
 
-          // 해당 날짜의 매치인지 확인
-          if (isSameDay(matchDate, targetDate)) {
-            played++;
-            
-            // 플레이어의 결과 찾기
-            const playerResult = matchDetail.matchInfo.find(info => info.ouid === ouid);
-            if (playerResult) {
-              const result = playerResult.matchDetail.matchResult;
-              if (result === '승') win++;
-              else if (result === '무') draw++;
-              else if (result === '패') loss++;
+            // 해당 날짜의 매치인지 확인
+            if (isSameDay(matchDate, targetDate)) {
+              played++;
+              
+              // 플레이어의 결과 찾기
+              const playerResult = matchDetail.matchInfo.find(info => info.ouid === ouid);
+              if (playerResult) {
+                const result = playerResult.matchDetail.matchResult;
+                if (result === '승') win++;
+                else if (result === '무') draw++;
+                else if (result === '패') loss++;
+              }
             }
+          } catch (matchError: any) {
+            console.error('Error fetching match detail:', matchId, matchError.response?.data || matchError.message);
+            continue; // 개별 매치 조회 실패는 건너뛰기
           }
 
           // API 호출 간격 조절
@@ -212,8 +225,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error in efficiency API:', error);
+    const errorMessage = error.response?.data?.message || error.message || '데이터를 가져오는데 실패했습니다.';
     return NextResponse.json(
-      { error: error.message || '데이터를 가져오는데 실패했습니다.' },
+      { error: errorMessage },
       { status: error.response?.status || 500 }
     );
   }
