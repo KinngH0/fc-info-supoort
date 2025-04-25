@@ -36,7 +36,12 @@ export const metadata: Metadata = {
     follow: true,
   },
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      {
+        url: '/favicon.ico',
+        type: 'image/x-icon',
+      }
+    ],
   },
 };
 
@@ -44,7 +49,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.ico" />
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1436343908093854" crossOrigin="anonymous" />
         <script
           dangerouslySetInnerHTML={{
