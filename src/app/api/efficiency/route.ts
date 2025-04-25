@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
-const API_KEY = 'live_bed3de42ec2c55504592a7dadf646395530b83f3235fd2f97d894bcfb3627191efe8d04e6d233bd35cf2fabdeb93fb0d';
+const API_KEY = process.env.FC_API_KEY;
 const MAX_MATCHES_PER_REQUEST = 20; // 한 번에 처리할 최대 매치 수
 
 interface MatchDetail {
@@ -26,6 +26,16 @@ interface MatchResult {
   lastOffset: number;
 }
 
+// 날짜가 같은지 확인하는 함수
+function isSameDay(date1: Date, date2: Date): boolean {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
+  );
+}
+
+// ouid 조회 함수
 async function getOuid(nickname: string): Promise<string> {
   try {
     const response = await axios.get(
@@ -38,23 +48,17 @@ async function getOuid(nickname: string): Promise<string> {
       }
     );
 
-    if (!response.data || !response.data.ouid) {
-      throw new Error('존재하지 않는 닉네임입니다.');
-    }
-
-    return response.data.ouid;
+    return response.data;
   } catch (error: any) {
     console.error('Error in getOuid:', error.response?.data || error.message);
-    if (error.response?.status === 404) {
-      throw new Error('존재하지 않는 닉네임입니다.');
-    }
     if (error.response?.status === 429) {
       throw new Error('API 호출 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
     }
-    throw new Error(error.response?.data?.message || '유저 정보를 가져오지 못했습니다.');
+    throw new Error(error.response?.data?.message || '사용자를 찾을 수 없습니다.');
   }
 }
 
+// 매치 ID 목록 조회 함수
 async function getMatchIds(offset: number = 0): Promise<string[]> {
   try {
     const response = await axios.get(
@@ -82,6 +86,7 @@ async function getMatchIds(offset: number = 0): Promise<string[]> {
   }
 }
 
+// 매치 상세 정보 조회 함수
 async function getMatchDetail(matchId: string): Promise<MatchDetail> {
   try {
     const response = await axios.get(
@@ -104,14 +109,7 @@ async function getMatchDetail(matchId: string): Promise<MatchDetail> {
   }
 }
 
-function isSameDay(date1: Date, date2: Date): boolean {
-  return (
-    date1.getFullYear() === date2.getFullYear() &&
-    date1.getMonth() === date2.getMonth() &&
-    date1.getDate() === date2.getDate()
-  );
-}
-
+// 매치 처리 함수
 async function processMatches(ouid: string, targetDate: Date, offset: number): Promise<MatchResult> {
   let played = 0;
   let win = 0;

@@ -1,7 +1,7 @@
 // src/app/bbs/efficiency/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface MatchResult {
   nickname: string;
@@ -23,6 +23,15 @@ export default function EfficiencyPage() {
   const [result, setResult] = useState<MatchResult | null>(null);
   const [error, setError] = useState<string>('');
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // 컴포넌트가 마운트될 때 오늘 날짜를 기본값으로 설정
+  useEffect(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    setDate(`${year}-${month}-${day}`);
+  }, []);
 
   const fetchMatches = async (offset: number = 0, accumulate: boolean = false) => {
     try {
@@ -82,38 +91,7 @@ export default function EfficiencyPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-10 px-4 relative pt-24">
-      {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="text-white text-center px-4">
-            <svg
-              className="animate-spin h-8 w-8 mb-4 mx-auto text-white"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8v8z"
-              />
-            </svg>
-            <p className="text-lg">데이터를 불러오는 중입니다...</p>
-          </div>
-        </div>
-      )}
-
-      <h1 className="title-main mb-4">⚡ 효율 조회</h1>
-      <p className="text-sub mb-6">특정 날짜에 획득한 예상 FC를 조회합니다.</p>
-
+    <div className="container mx-auto px-4 py-8">
       <form
         onSubmit={handleSubmit}
         className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow mb-10 space-y-4"
@@ -138,6 +116,7 @@ export default function EfficiencyPage() {
             value={date}
             onChange={(e) => setDate(e.target.value)}
             required
+            max={new Date().toISOString().split('T')[0]}
           />
         </div>
 
@@ -146,7 +125,7 @@ export default function EfficiencyPage() {
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded"
           disabled={loading}
         >
-          조회하기
+          {loading ? '조회 중...' : '조회하기'}
         </button>
       </form>
 
