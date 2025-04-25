@@ -1,40 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { JSDOM } from 'jsdom';
 import axios from 'axios';
-import * as cheerio from 'cheerio';
-import https from 'https'; // 👈 https 모듈 import
+import https from 'https';
 
-// 👇 self-signed 인증서 무시 설정
-const agent = new https.Agent({
-  rejectUnauthorized: false,
-});
+const agent = new https.Agent({ rejectUnauthorized: false });
+const jobStore = new Map<string, any>();
+
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export async function POST(req: NextRequest) {
+  const id = Date.now().toString();
+  jobStore.set(id, { status: 'processing', data: null, progress: 0 });
+
+  const { rankLimit, topN } = await req.json();
+
+  processTeamColorData(id, rankLimit, topN);
+
+  return NextResponse.json({ jobId: id });
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const jobId = searchParams.get('jobId');
+  if (!jobId || !jobStore.has(jobId)) {
+    return NextResponse.json({ error: 'Invalid jobId' }, { status: 400 });
+  }
+
+  const result = jobStore.get(jobId);
+  return NextResponse.json(result);
+}
+
+async function processTeamColorData(jobId: string, rankLimit: number, topN: number) {
   try {
-    const { rankLimit, topN } = await req.json();
     const totalPages = Math.ceil(rankLimit / 20);
     const allUsers: any[] = [];
 
     for (let page = 1; page <= totalPages; page++) {
-      const url = `https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`;
+      await delay(200); // 딜레이 추가로 Vercel 타임아웃 방지
 
+      const url = `https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`;
       const res = await axios.get(url, {
         headers: { 'User-Agent': 'Mozilla/5.0' },
-        httpsAgent: agent, // ✅ 핵심 추가 부분
+        httpsAgent: agent,
       });
 
-      const $ = cheerio.load(res.data);
+      const dom = new JSDOM(res.data);
+      const trs = dom.window.document.querySelectorAll('.tbody .tr');
 
-      $('.tbody .tr').each((_, el) => {
-        const nickname = $(el).find('.rank_coach .name').text().trim();
-        const teamColor = $(el)
-          .find('.td.team_color .name .inner')
-          .text()
-          .replace(/\(.*?\)/g, '')
-          .trim();
-        const valueRaw = $(el).find('.rank_coach .price').attr('title') || '0';
-        const rankText = $(el).find('.rank_no').text().trim();
-        const scoreText = $(el).find('.td.rank_r_win_point').text().trim();
-        const formation = $(el).find('.td.formation').text().trim();
+      trs.forEach((tr: any) => {
+        const nickname = tr.querySelector('.rank_coach .name')?.textContent?.trim() || '';
+        const teamColor = tr.querySelector('.td.team_color .name .inner')?.textContent?.replace(/\(.*?\)/g, '').trim() || '';
+        const valueRaw = tr.querySelector('.rank_coach .price')?.getAttribute('title') || '0';
+        const formation = tr.querySelector('.td.formation')?.textContent?.trim() || '';
+        const rankText = tr.querySelector('.rank_no')?.textContent?.trim() || '0';
+        const scoreText = tr.querySelector('.td.rank_r_win_point')?.textContent?.trim() || '0';
 
         allUsers.push({
           nickname,
@@ -45,6 +66,13 @@ export async function POST(req: NextRequest) {
           formation,
         });
       });
+
+      // ✅ 진행률 저장
+      const progress = Math.min(100, Math.round((page / totalPages) * 100));
+      const prev = jobStore.get(jobId);
+      if (prev) {
+        jobStore.set(jobId, { ...prev, progress });
+      }
 
       if (allUsers.length >= rankLimit) break;
     }
@@ -74,7 +102,7 @@ export async function POST(req: NextRequest) {
           .slice(0, 3)
           .map(([form, count]) => ({
             form,
-            percent: `${((count / users.length) * 100).toFixed(1)}%(${count}명)`,
+            percent: `${((count / users.length) * 100).toFixed(1)}%(${count}명)`
           }));
 
         const maxValue = Math.max(...users.map((u) => u.value));
@@ -102,13 +130,8 @@ export async function POST(req: NextRequest) {
         };
       });
 
-    return NextResponse.json({
-      total: limitedUsers.length,
-      topN,
-      result: sorted,
-    });
+    jobStore.set(jobId, { status: 'completed', result: sorted, progress: 100 });
   } catch (err: any) {
-    console.error('❌ teamcolor route 오류:', err.message);
-    return NextResponse.json({ error: '서버 오류' }, { status: 500 });
+    jobStore.set(jobId, { status: 'error', message: err.message, progress: 0 });
   }
 }

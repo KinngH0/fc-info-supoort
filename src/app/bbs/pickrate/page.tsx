@@ -8,21 +8,32 @@ export default function PickratePage() {
   const [topN, setTopN] = useState(5);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
+    setJobId(null);
 
-    const res = await fetch('/api/pickrate', {
+    const jobRes = await fetch('/api/pickrate/job', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rankLimit, teamColor, topN })
     });
 
-    const data = await res.json();
-    setResult(data);
-    setLoading(false);
+    const { jobId: newJobId } = await jobRes.json();
+    setJobId(newJobId);
+
+    const interval = setInterval(async () => {
+      const res = await fetch(`/api/pickrate/status?jobId=${newJobId}`);
+      const data = await res.json();
+      if (data.done) {
+        clearInterval(interval);
+        setResult(data.result);
+        setLoading(false);
+      }
+    }, 3000);
   };
 
   const handleExport = async () => {
@@ -48,7 +59,7 @@ export default function PickratePage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto py-10 px-4 relative pt-24">
+    <div className="max-w-5xl mx-auto py-10 px-4 relative pt-24">
       {loading && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center z-50 text-white">
           <svg className="animate-spin h-8 w-8 mb-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -123,25 +134,26 @@ export default function PickratePage() {
                   <table className="w-full text-sm text-left border dark:border-gray-700 table-fixed">
                     <thead className="bg-gray-100 dark:bg-gray-700">
                       <tr>
-                        <th className="px-3 py-2 w-[6rem]">순위</th>
-                        <th className="px-3 py-2 w-[14rem]">선수명</th>
-                        <th className="px-3 py-2 w-[8rem]">시즌</th>
-                        <th className="px-3 py-2 w-[8rem]">강화단계</th>
-                        <th className="px-3 py-2 w-[10rem]">픽률</th>
-                        <th className="px-3 py-2">사용자</th>
+                        <th className="px-3 py-2 w-12">순위</th>
+                        <th className="px-3 py-2 w-48">선수명</th>
+                        <th className="px-3 py-2 w-28">시즌</th>
+                        <th className="px-3 py-2 w-24">강화단계</th>
+                        <th className="px-3 py-2 w-32">픽률</th>
+                        <th className="px-3 py-2 w-64">사용자</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(players as any[]).map((p, idx) => {
-                        const [namePart, seasonGrade] = p.name.split('(');
-                        const [season, gradePart] = seasonGrade?.replace(')', '').split('-') || ['', ''];
+                        const [name, seasonAndGrade] = p.name.split(' - ');
+                        const [season, gradeStr] = seasonAndGrade?.match(/\((.*?)\)/)?.[1]?.split(') ') || ['-', '-'];
+                        const percent = ((p.count / result.userCount) * 100).toFixed(1);
                         return (
                           <tr key={idx} className="border-t dark:border-gray-600">
                             <td className="px-3 py-2">{idx + 1}위</td>
-                            <td className="px-3 py-2">{namePart?.trim()}</td>
-                            <td className="px-3 py-2">{season?.trim()}</td>
-                            <td className="px-3 py-2">{gradePart?.trim()}</td>
-                            <td className="px-3 py-2">{((p.count / result.userCount) * 100).toFixed(1)}% ({p.count}명)</td>
+                            <td className="px-3 py-2">{name}</td>
+                            <td className="px-3 py-2">{season}</td>
+                            <td className="px-3 py-2">{gradeStr}</td>
+                            <td className="px-3 py-2">{percent}% ({p.count}명)</td>
                             <td className="px-3 py-2 text-gray-500 dark:text-gray-400">
                               {p.users.slice(0, 3).join(', ')}{p.users.length > 3 ? ` 외 ${p.users.length - 3}명` : ''}
                             </td>
