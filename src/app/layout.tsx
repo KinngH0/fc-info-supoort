@@ -1,10 +1,38 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import Header from '@/components/Header';
 
+const inter = Inter({ subsets: ['latin'] });
+
 export const metadata: Metadata = {
-  title: 'FC INFO SUPPORT',
-  description: 'FC 온라인 분석 도구',
+  title: {
+    default: 'FC 정보 지원',
+    template: '%s | FC 정보 지원',
+  },
+  description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
+  keywords: ['FC 온라인', '픽률', '팀컬러', '통계', '분석'],
+  authors: [{ name: 'FC 정보 지원' }],
+  openGraph: {
+    type: 'website',
+    locale: 'ko_KR',
+    url: 'https://fc-info-support.vercel.app',
+    siteName: 'FC 정보 지원',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'FC 정보 지원',
+    description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
+  },
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -29,9 +57,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="bg-gray-50 dark:bg-zinc-800 text-black dark:text-white">
-        <Header />
-        {children}
+      <body className={`${inter.className} bg-gray-50 dark:bg-gray-900 transition-colors duration-200`}>
+        <div className="min-h-screen flex flex-col">
+          <Header />
+          <main className="flex-grow">
+            {children}
+          </main>
+          <footer className="py-6 text-center text-gray-600 dark:text-gray-400 text-sm">
+            <p>© {new Date().getFullYear()} FC 정보 지원. All rights reserved.</p>
+          </footer>
+        </div>
       </body>
     </html>
   );

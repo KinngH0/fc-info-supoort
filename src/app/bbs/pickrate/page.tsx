@@ -152,10 +152,10 @@ export default function PickratePage() {
             <p className="text-sub text-sm">총 분석 인원: <strong>{result.userCount}</strong>명</p>
 
             {Object.entries(result.summary).map(([positionGroup, players]) => (
-              <div key={positionGroup}>
+              <div key={positionGroup} className="mb-8">
                 <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-2">{positionGroup}</h2>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left border dark:border-gray-700 table-fixed">
+                  <table className="w-full text-sm text-left border dark:border-gray-700">
                     <thead className="bg-gray-100 dark:bg-gray-700">
                       <tr>
                         {['순위', '선수명', '시즌', '강화단계', '픽률'].map((label, index) => {
@@ -163,7 +163,7 @@ export default function PickratePage() {
                           return (
                             <th
                               key={index}
-                              className="px-3 py-2 cursor-pointer"
+                              className="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                               onClick={() => toggleSort(keys[index])}
                             >
                               {label}
@@ -178,7 +178,7 @@ export default function PickratePage() {
                       {sortedPlayers(players as any[]).map((p, idx) => {
                         const percent = ((p.count / result.userCount) * 100).toFixed(1);
                         return (
-                          <tr key={idx} className="border-t dark:border-gray-600">
+                          <tr key={idx} className="border-t dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                             <td className="px-3 py-2">{idx + 1}위</td>
                             <td className="px-3 py-2">{p.name}</td>
                             <td className="px-3 py-2">{p.season}</td>
