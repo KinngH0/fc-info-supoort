@@ -2,9 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 import axios from 'axios';
-import https from 'https';
-
-const agent = new https.Agent({ rejectUnauthorized: false });
 
 // 캐시 설정
 const CACHE_DURATION = 60 * 60 * 1000; // 1시간
@@ -33,7 +30,6 @@ async function fetchPage(page: number): Promise<any[]> {
         headers: {
           'User-Agent': 'Mozilla/5.0',
         },
-        httpsAgent: agent,
       }
     );
 
@@ -78,7 +74,7 @@ async function fetchPages(startPage: number, endPage: number): Promise<any[]> {
     const results = await Promise.all(batch);
     pages.push(...results.flat());
     
-    // API 호출 간격 조절
+    // 크롤링 간격 조절
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   return pages;
