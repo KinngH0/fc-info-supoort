@@ -3,24 +3,33 @@
 
 import { useState } from 'react';
 
+interface MatchResult {
+  nickname: string;
+  date: string;
+  played: number;
+  win: number;
+  draw: number;
+  loss: number;
+  winRate: number;
+  earnedFc: number;
+  hasMore: boolean;
+  lastOffset: number;
+}
+
 export default function EfficiencyPage() {
   const [nickname, setNickname] = useState('');
   const [date, setDate] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<MatchResult | null>(null);
   const [error, setError] = useState<string>('');
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setResult(null);
-    setError('');
-
+  const fetchMatches = async (offset: number = 0, accumulate: boolean = false) => {
     try {
       const res = await fetch('/api/efficiency', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nickname, date }),
+        body: JSON.stringify({ nickname, date, offset }),
       });
 
       const data = await res.json();
@@ -29,11 +38,46 @@ export default function EfficiencyPage() {
         throw new Error(data.error || '데이터를 가져오는데 실패했습니다.');
       }
 
-      setResult(data);
+      if (accumulate && result) {
+        // 기존 결과와 새로운 결과를 합산
+        setResult({
+          ...data,
+          played: result.played + data.played,
+          win: result.win + data.win,
+          draw: result.draw + data.draw,
+          loss: result.loss + data.loss,
+          winRate: Math.round(((result.win + data.win) / (result.played + data.played)) * 100),
+          earnedFc: (result.win + data.win) * 15,
+        });
+      } else {
+        setResult(data);
+      }
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setResult(null);
+    setError('');
+
+    try {
+      await fetchMatches();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (!result || !result.hasMore || loadingMore) return;
+    
+    setLoadingMore(true);
+    try {
+      await fetchMatches(result.lastOffset, true);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -127,6 +171,42 @@ export default function EfficiencyPage() {
               획득 FC: {result.earnedFc}FC
             </p>
           </div>
+
+          {result.hasMore && (
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="mt-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded flex items-center justify-center w-full"
+            >
+              {loadingMore ? (
+                <>
+                  <svg
+                    className="animate-spin h-5 w-5 mr-2"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    />
+                  </svg>
+                  더 불러오는 중...
+                </>
+              ) : (
+                '더 불러오기'
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>
