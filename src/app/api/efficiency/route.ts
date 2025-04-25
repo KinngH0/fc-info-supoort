@@ -11,6 +11,8 @@ async function fetchWithRetry(url: string, retries = 3) {
       const response = await axios.get(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'ko-KR,ko;q=0.8,en-US;q=0.5,en;q=0.3',
         },
         httpsAgent: agent,
         timeout: 5000,
@@ -24,9 +26,8 @@ async function fetchWithRetry(url: string, retries = 3) {
 }
 
 function parseDate(dateStr: string): Date {
-  // "2024-03-19 12:34" 형식의 문자열을 Date 객체로 변환
-  const [date, time] = dateStr.split(' ');
-  return new Date(date + 'T' + time);
+  // "2024-03-19 12:34:56" 형식의 문자열을 Date 객체로 변환
+  return new Date(dateStr.replace(' ', 'T'));
 }
 
 function isSameDay(date1: Date, date2: Date): boolean {
@@ -68,44 +69,57 @@ export async function POST(req: NextRequest) {
     let page = 1;
 
     while (shouldContinue && page <= 10) { // 최대 10페이지까지만 조회
-      // 매치 데이터 조회
-      const matchesUrl = `https://fconline.nexon.com/datacenter/rank?n4pageno=${page}&n4mode=0&strSearch=${encodeURIComponent(nickname)}`;
+      // 매치 데이터 조회 (공식경기 - 감독모드)
+      const matchesUrl = `https://fconline.nexon.com/Profile/MatchRecord?n4pageno=${page}&nickname=${encodeURIComponent(nickname)}&n4mode=0`;
       const html = await fetchWithRetry(matchesUrl);
       
       const $ = cheerio.load(html);
       let foundMatchesOnPage = false;
       
       // 매치 데이터 파싱
-      $('.record_lst .tr').each((_, element) => {
-        const dateText = $(element).find('.date').text().trim();
-        const resultText = $(element).find('.result').text().trim();
+      $('.record_table tbody tr').each((_, element) => {
+        const $row = $(element);
+        const dateText = $row.find('td:nth-child(4)').text().trim();
+        const resultText = $row.find('td:nth-child(3)').text().trim();
         
         if (dateText && resultText) {
-          const matchDate = parseDate(dateText);
-          
-          if (isSameDay(matchDate, targetDate)) {
-            foundMatchesOnPage = true;
-            played++;
+          try {
+            const matchDate = parseDate(dateText);
             
-            if (resultText.includes('승')) {
-              win++;
-            } else if (resultText.includes('무')) {
-              draw++;
-            } else if (resultText.includes('패')) {
-              loss++;
+            if (isSameDay(matchDate, targetDate)) {
+              foundMatchesOnPage = true;
+              played++;
+              
+              if (resultText === '승') {
+                win++;
+              } else if (resultText === '무') {
+                draw++;
+              } else if (resultText === '패') {
+                loss++;
+              }
+            } else if (matchDate < targetDate) {
+              shouldContinue = false;
+              return false; // break the .each() loop
             }
-          } else if (matchDate < targetDate) {
-            shouldContinue = false;
-            return false; // break the .each() loop
+          } catch (err) {
+            console.error('Date parsing error:', err);
           }
         }
       });
+
+      // 더 이상 매치 데이터가 없으면 종료
+      if ($('.record_table tbody tr').length === 0) {
+        break;
+      }
 
       if (!foundMatchesOnPage && !shouldContinue) {
         break;
       }
       
       page++;
+      
+      // API 호출 간격 조절
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
     // 결과 계산
