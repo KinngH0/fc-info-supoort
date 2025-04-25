@@ -17,15 +17,6 @@ interface MatchDetail {
   matchInfo: MatchInfo[];
 }
 
-interface MatchResult {
-  played: number;
-  win: number;
-  draw: number;
-  loss: number;
-  hasMore: boolean;
-  lastOffset: number;
-}
-
 // axios 인스턴스 생성 및 최적화
 const createAxiosInstance = (apiKey: string): AxiosInstance => {
   return axios.create({
@@ -39,19 +30,6 @@ const createAxiosInstance = (apiKey: string): AxiosInstance => {
   });
 };
 
-// 날짜가 같은지 확인하는 함수 (한국 시간 기준)
-function isSameDay(date1: Date, date2: Date): boolean {
-  // UTC+9 (한국 시간)로 변환
-  const d1 = new Date(date1.getTime() + 9 * 60 * 60 * 1000);
-  const d2 = new Date(date2.getTime() + 9 * 60 * 60 * 1000);
-  
-  return (
-    d1.getUTCFullYear() === d2.getUTCFullYear() &&
-    d1.getUTCMonth() === d2.getUTCMonth() &&
-    d1.getUTCDate() === d2.getUTCDate()
-  );
-}
-
 // ouid 조회 함수
 async function getUserId(axiosInstance: AxiosInstance, nickname: string): Promise<string | null> {
   try {
@@ -64,10 +42,10 @@ async function getUserId(axiosInstance: AxiosInstance, nickname: string): Promis
 }
 
 // 매치 ID 목록 조회 함수
-async function getMatchList(axiosInstance: AxiosInstance, ouid: string, offset: number, limit: number): Promise<string[]> {
+async function getMatchList(axiosInstance: AxiosInstance, ouid: string): Promise<string[]> {
   try {
     const res = await axiosInstance.get(
-      `/user/match?matchtype=52&ouid=${ouid}&offset=${offset}&limit=${limit}&orderby=desc`
+      `/user/match?matchtype=52&ouid=${ouid}&offset=0&limit=100&orderby=desc`
     );
     return res.data;
   } catch (error) {
@@ -88,19 +66,18 @@ async function getMatchDetail(axiosInstance: AxiosInstance, matchId: string): Pr
 }
 
 // 매치 처리 함수
-async function processMatches(axiosInstance: AxiosInstance, ouid: string, targetDate: Date, offset: number): Promise<MatchResult> {
+async function processMatches(axiosInstance: AxiosInstance, ouid: string): Promise<any> {
   let played = 0;
   let win = 0;
   let draw = 0;
   let loss = 0;
-  let hasMore = true;
-  let oldestMatchDate = new Date();
+  const matches: any[] = [];
 
   // 매치 ID 목록 조회
-  const matchIds = await getMatchList(axiosInstance, ouid, offset, 100);
+  const matchIds = await getMatchList(axiosInstance, ouid);
   
   if (matchIds.length === 0) {
-    return { played, win, draw, loss, hasMore: false, lastOffset: offset };
+    return { played, win, draw, loss, matches };
   }
 
   // 각 매치의 상세 정보 조회
@@ -114,25 +91,26 @@ async function processMatches(axiosInstance: AxiosInstance, ouid: string, target
           const matchTimeStr = info.matchDate || matchData.matchDate;
           if (!matchTimeStr) continue;
 
-          const matchTime = new Date(matchTimeStr);
-          matchTime.setHours(0, 0, 0, 0);
-
-          if (matchTime.getTime() > targetDate.getTime()) {
-            continue;
-          } else if (matchTime.getTime() < targetDate.getTime()) {
-            hasMore = false;
-            break;
-          }
-
           played++;
           const matchResult = info.matchDetail.matchResult;
           if (matchResult === '승') win++;
           else if (matchResult === '무') draw++;
           else if (matchResult === '패') loss++;
+
+          // 매치 정보 저장
+          matches.push({
+            date: new Date(matchTimeStr).toLocaleString('ko-KR', {
+              timeZone: 'Asia/Seoul',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
+            result: matchResult
+          });
         }
       }
-
-      if (!hasMore) break;
 
       // API 호출 간격 조절
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -142,27 +120,25 @@ async function processMatches(axiosInstance: AxiosInstance, ouid: string, target
     }
   }
 
-  // 더 이상 매치가 없거나 타겟 날짜보다 이전 날짜의 매치를 찾았다면 중단
-  hasMore = hasMore && oldestMatchDate >= targetDate;
-
   return {
     played,
     win,
     draw,
     loss,
-    hasMore,
-    lastOffset: offset + 100
+    winRate: played > 0 ? Math.round((win / played) * 100) : 0,
+    earnedFc: win * 15,
+    matches
   };
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { nickname, targetDate } = await req.json();
+    const { nickname } = await req.json();
     const apiKey = process.env.FC_API_KEY;
 
-    if (!nickname || !targetDate) {
+    if (!nickname) {
       return NextResponse.json(
-        { error: '닉네임과 날짜를 입력해주세요.' },
+        { error: '닉네임을 입력해주세요.' },
         { status: 400 }
       );
     }
@@ -184,21 +160,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const target = new Date(targetDate);
-    target.setHours(0, 0, 0, 0);
-
     // 매치 처리
-    const result = await processMatches(axiosInstance, ouid, target, 0);
-
-    // 승률 계산 (0으로 나누는 경우 처리)
-    const winRate = result.played > 0 ? Math.round((result.win / result.played) * 100) : 0;
+    const result = await processMatches(axiosInstance, ouid);
 
     return NextResponse.json({
       nickname,
-      date: targetDate,
-      ...result,
-      winRate,
-      earnedFc: result.win * 15,
+      ...result
     });
   } catch (error: any) {
     console.error('Error in efficiency API:', error);
