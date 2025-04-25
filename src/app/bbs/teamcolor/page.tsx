@@ -6,6 +6,8 @@ export default function TeamColorPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
+  const [startRank, setStartRank] = useState<number>(1);
+  const [endRank, setEndRank] = useState<number>(100);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -13,12 +15,33 @@ export default function TeamColorPage() {
     setError(null);
     
     try {
-      // API 호출 로직
-      setLoading(false);
-    } catch (err) {
+      const response = await fetch('/api/teamcolor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startRank, endRank })
+      });
+
+      const responseData = await response.json();
+      if (responseData.error) {
+        setError(responseData.error);
+      } else {
+        setData(responseData);
+      }
+    } catch (error) {
       setError('데이터를 불러오는 중 오류가 발생했습니다.');
+    } finally {
       setLoading(false);
     }
+  };
+
+  const handleStartRankChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value);
+    setStartRank(isNaN(value) ? 1 : value);
+  };
+
+  const handleEndRankChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value);
+    setEndRank(isNaN(value) ? 100 : value);
   };
 
   return (
@@ -36,6 +59,8 @@ export default function TeamColorPage() {
                 <input
                   type="number"
                   id="startRank"
+                  value={startRank}
+                  onChange={handleStartRankChange}
                   className="w-full px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#2A303C] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                   placeholder="시작 순위 입력"
                   min="1"
@@ -48,6 +73,8 @@ export default function TeamColorPage() {
                 <input
                   type="number"
                   id="endRank"
+                  value={endRank}
+                  onChange={handleEndRankChange}
                   className="w-full px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#2A303C] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                   placeholder="종료 순위 입력"
                   min="1"
@@ -94,7 +121,22 @@ export default function TeamColorPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-[#1E2330] divide-y divide-gray-200 dark:divide-gray-700">
-                    {/* 데이터 행들이 여기에 들어갈 예정 */}
+                    {data.teams?.map((team: any, index: number) => (
+                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-[#2A303C] transition-colors duration-150">
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {index + 1}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {team.name}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {team.percentage}%
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {team.users}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

@@ -20,10 +20,21 @@ export default function EfficiencyPage() {
     setError(null);
     
     try {
-      // API 호출 로직
-      setLoading(false);
-    } catch (err) {
+      const response = await fetch('/api/efficiency', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date })
+      });
+
+      const responseData = await response.json();
+      if (responseData.error) {
+        setError(responseData.error);
+      } else {
+        setData(responseData);
+      }
+    } catch (error) {
       setError('데이터를 불러오는 중 오류가 발생했습니다.');
+    } finally {
       setLoading(false);
     }
   };
@@ -31,7 +42,7 @@ export default function EfficiencyPage() {
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-[#171B26] py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 text-center">효율 조회</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 text-center">효율성 분석</h1>
         
         <div className="bg-white dark:bg-[#1E2330] rounded-lg shadow-md p-6 mb-8">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -45,7 +56,6 @@ export default function EfficiencyPage() {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#2A303C] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                required
               />
             </div>
             <div className="flex justify-center">
@@ -54,7 +64,7 @@ export default function EfficiencyPage() {
                 disabled={loading}
                 className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
               >
-                {loading ? '조회 중...' : '조회하기'}
+                {loading ? '분석 중...' : '분석하기'}
               </button>
             </div>
           </form>
@@ -85,7 +95,19 @@ export default function EfficiencyPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-[#1E2330] divide-y divide-gray-200 dark:divide-gray-700">
-                    {/* 데이터 행들이 여기에 들어갈 예정 */}
+                    {data.efficiency?.map((item: any, index: number) => (
+                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-[#2A303C] transition-colors duration-150">
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {item.time}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {item.expectedFc}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700">
+                          {item.hourlyEfficiency}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

@@ -4,11 +4,7 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function PickratePage() {
-  const [rankLimit, setRankLimit] = useState(100);
-  const [teamColor, setTeamColor] = useState('all');
-  const [topN, setTopN] = useState(5);
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
   const [sortStates, setSortStates] = useState<Record<string, { key: string; asc: boolean }>>({});
   const [cacheKey, setCacheKey] = useState<string>('');
@@ -16,102 +12,41 @@ export default function PickratePage() {
   const [endRank, setEndRank] = useState<number>(100);
   const [error, setError] = useState<string | null>(null);
 
-  // 캐시된 결과를 가져오는 함수
-  const getCachedResult = useCallback(async () => {
-    const key = `${rankLimit}-${teamColor}-${topN}`;
-    if (key === cacheKey && result) return result;
-
-    const cached = localStorage.getItem(`pickrate-${key}`);
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached);
-      // 1시간 이내의 캐시만 사용
-      if (Date.now() - timestamp < 3600000) {
-        setResult(data);
-        setCacheKey(key);
-        return data;
-      }
-    }
-    return null;
-  }, [rankLimit, teamColor, topN, cacheKey, result]);
-
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // 캐시된 결과 확인
-    const cached = await getCachedResult();
-    if (cached) {
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
-    setProgress(0);
-    setResult(null);
-
+    setError(null);
+    
     try {
-      const jobRes = await fetch('/api/pickrate', {
+      // API 호출 로직
+      const response = await fetch('/api/pickrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rankLimit, teamColor, topN })
+        body: JSON.stringify({ startRank, endRank })
       });
 
-      const { jobId } = await jobRes.json();
-
-      const interval = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/pickrate?jobId=${jobId}`);
-          const data = await res.json();
-
-          if (data.progress !== undefined) setProgress(data.progress);
-          if (data.done) {
-            clearInterval(interval);
-            setResult(data.result);
-            setLoading(false);
-            
-            // 결과 캐싱
-            const key = `${rankLimit}-${teamColor}-${topN}`;
-            localStorage.setItem(`pickrate-${key}`, JSON.stringify({
-              data: data.result,
-              timestamp: Date.now()
-            }));
-            setCacheKey(key);
-          }
-        } catch (error) {
-          console.error('Error fetching progress:', error);
-          clearInterval(interval);
-          setLoading(false);
-        }
-      }, 2000); // 3초에서 2초로 간격 줄임
-    } catch (error) {
-      console.error('Error submitting job:', error);
+      const data = await response.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setResult(data);
+      }
+    } catch (err) {
+      setError('데이터를 불러오는 중 오류가 발생했습니다.');
+    } finally {
       setLoading(false);
     }
-  }, [rankLimit, teamColor, topN, getCachedResult]);
+  }, [startRank, endRank]);
 
-  const handleExport = useCallback(async () => {
-    if (!result) return;
-    try {
-      const res = await fetch('/api/pickrate/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          summary: result.summary,
-          userCount: result.userCount,
-          teamColor
-        })
-      });
+  const handleStartRankChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value);
+    setStartRank(isNaN(value) ? 1 : value);
+  };
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'pickrate_report.xlsx';
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error exporting data:', error);
-    }
-  }, [result, teamColor]);
+  const handleEndRankChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value);
+    setEndRank(isNaN(value) ? 100 : value);
+  };
 
   const toggleSort = useCallback((positionGroup: string, key: string) => {
     setSortStates(prev => ({
@@ -123,11 +58,11 @@ export default function PickratePage() {
     }));
   }, []);
 
-  const sortedPlayers = useCallback((players: any[], positionGroup: string) => {
+  const sortedPlayers = useCallback((playerList: any[], positionGroup: string) => {
     const sortState = sortStates[positionGroup];
-    if (!sortState?.key) return players;
+    if (!sortState?.key) return playerList;
     
-    return [...players].sort((a, b) => {
+    return [...playerList].sort((a, b) => {
       const aVal = a[sortState.key];
       const bVal = b[sortState.key];
       if (typeof aVal === 'string') {
@@ -136,21 +71,6 @@ export default function PickratePage() {
       return sortState.asc ? aVal - bVal : bVal - aVal;
     });
   }, [sortStates]);
-
-  // 폼 입력값 변경 핸들러
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, setter: (value: any) => void) => {
-    setter(e.target.value);
-  }, []);
-
-  const handleStartRankChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    setStartRank(isNaN(value) ? 1 : value);
-  };
-
-  const handleEndRankChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    setEndRank(isNaN(value) ? 100 : value);
-  };
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-[#171B26] py-8 px-4">
@@ -235,27 +155,29 @@ export default function PickratePage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-[#1E2330] divide-y divide-gray-200 dark:divide-gray-700">
-                    {sortedPlayers(players as any[], '').map((p, idx) => {
-                      const percent = ((p.count / result.userCount) * 100).toFixed(1);
-                      return (
-                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-[#2A303C] transition-colors duration-150">
-                          {Object.entries(result.summary).map(([positionGroup, players]) => (
-                            <td
-                              key={positionGroup}
-                              className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700 truncate"
-                              style={{ width: getColumnWidth(positionGroup) }}
-                            >
-                              {positionGroup === 'rank' && (idx + 1).toString()}
-                              {positionGroup === 'name' && p.name}
-                              {positionGroup === 'season' && p.season}
-                              {positionGroup === 'grade' && p.grade}
-                              {positionGroup === 'count' && `${percent}% (${p.count}명)`}
-                              {positionGroup === 'users' && p.users.slice(0, 3).join(', ')}{p.users.length > 3 ? ` 외 ${p.users.length - 3}명` : ''}
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
+                    {Object.entries(result.summary).map(([positionGroup, players]) => (
+                      sortedPlayers(players as any[], positionGroup).map((p: any, idx: number) => {
+                        const percent = ((p.count / result.userCount) * 100).toFixed(1);
+                        return (
+                          <tr key={`${positionGroup}-${idx}`} className="hover:bg-gray-50 dark:hover:bg-[#2A303C] transition-colors duration-150">
+                            {Object.entries(result.summary).map(([col, _]) => (
+                              <td
+                                key={`${positionGroup}-${idx}-${col}`}
+                                className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700 truncate"
+                                style={{ width: getColumnWidth(col) }}
+                              >
+                                {col === 'rank' && (idx + 1).toString()}
+                                {col === 'name' && p.name}
+                                {col === 'season' && p.season}
+                                {col === 'grade' && p.grade}
+                                {col === 'count' && `${percent}% (${p.count}명)`}
+                                {col === 'users' && p.users.slice(0, 3).join(', ')}{p.users.length > 3 ? ` 외 ${p.users.length - 3}명` : ''}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })
+                    ))}
                   </tbody>
                 </table>
               </div>
