@@ -3,7 +3,6 @@ import axios from 'axios';
 
 const API_KEY = 'live_bed3de42ec2c55504592a7dadf646395530b83f3235fd2f97d894bcfb3627191efe8d04e6d233bd35cf2fabdeb93fb0d';
 const MAX_MATCHES_PER_REQUEST = 20; // 한 번에 처리할 최대 매치 수
-const MAX_RETRIES = 3; // 최대 재시도 횟수
 
 interface MatchDetail {
   matchId: string;
