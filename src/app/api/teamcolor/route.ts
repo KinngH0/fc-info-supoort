@@ -1,13 +1,17 @@
-// 📄 /src/app/api/teamcolor/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import https from 'https'; // 👈 https 모듈 import
+
+// 👇 self-signed 인증서 무시 설정
+const agent = new https.Agent({
+  rejectUnauthorized: false,
+});
 
 export async function POST(req: NextRequest) {
   try {
     const { rankLimit, topN } = await req.json();
     const totalPages = Math.ceil(rankLimit / 20);
-
     const allUsers: any[] = [];
 
     for (let page = 1; page <= totalPages; page++) {
@@ -15,6 +19,7 @@ export async function POST(req: NextRequest) {
 
       const res = await axios.get(url, {
         headers: { 'User-Agent': 'Mozilla/5.0' },
+        httpsAgent: agent, // ✅ 핵심 추가 부분
       });
 
       const $ = cheerio.load(res.data);

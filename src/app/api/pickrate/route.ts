@@ -1,7 +1,12 @@
-// src/app/api/pickrate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 import axios from 'axios';
+import https from 'https';
+
+// 👇 self-signed 인증서 무시 설정
+const agent = new https.Agent({
+  rejectUnauthorized: false,
+});
 
 export async function POST(req: NextRequest) {
   const { rankLimit, teamColor, topN } = await req.json();
@@ -14,7 +19,10 @@ export async function POST(req: NextRequest) {
 
   const fetchMeta = async (url: string) => {
     try {
-      const res = await axios.get(url, { headers });
+      const res = await axios.get(url, {
+        headers,
+        httpsAgent: agent, // ✅ 메타 정보도 안전하게 요청
+      });
       return res.data;
     } catch {
       return [];
@@ -37,7 +45,9 @@ export async function POST(req: NextRequest) {
   for (let page = 1; page <= pages; page++) {
     const url = `https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`;
     try {
-      const res = await axios.get(url);
+      const res = await axios.get(url, {
+        httpsAgent: agent, // ✅ HTML 파싱용 요청도 인증서 우회
+      });
       const dom = new JSDOM(res.data);
       const trs = dom.window.document.querySelectorAll('.tbody .tr');
       let rank = (page - 1) * 20 + 1;
@@ -57,20 +67,37 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ✅ 유저별 매치 조회
   const userMatchResults: any[] = [];
 
   for (const user of rankedUsers) {
     try {
-      const ouidRes = await axios.get(`https://open.api.nexon.com/fconline/v1/id?nickname=${encodeURIComponent(user.nickname)}`, { headers });
+      const ouidRes = await axios.get(
+        `https://open.api.nexon.com/fconline/v1/id?nickname=${encodeURIComponent(user.nickname)}`,
+        {
+          headers,
+          httpsAgent: agent, // ✅ ouid 조회 요청
+        }
+      );
       const ouid = ouidRes.data.ouid;
       if (!ouid) continue;
 
-      const matchListRes = await axios.get(`https://open.api.nexon.com/fconline/v1/user/match?matchtype=52&ouid=${ouid}&offset=0&limit=1`, { headers });
+      const matchListRes = await axios.get(
+        `https://open.api.nexon.com/fconline/v1/user/match?matchtype=52&ouid=${ouid}&offset=0&limit=1`,
+        {
+          headers,
+          httpsAgent: agent, // ✅ 매치 리스트 요청
+        }
+      );
       const matchId = matchListRes.data[0];
       if (!matchId) continue;
 
-      const matchDetailRes = await axios.get(`https://open.api.nexon.com/fconline/v1/match-detail?matchid=${matchId}`, { headers });
+      const matchDetailRes = await axios.get(
+        `https://open.api.nexon.com/fconline/v1/match-detail?matchid=${matchId}`,
+        {
+          headers,
+          httpsAgent: agent, // ✅ 매치 상세 요청
+        }
+      );
       const matchInfo = matchDetailRes.data.matchInfo;
 
       for (const info of matchInfo) {
@@ -90,7 +117,7 @@ export async function POST(req: NextRequest) {
             position,
             name,
             season,
-            grade
+            grade,
           });
         }
       }
@@ -99,7 +126,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ✅ 포지션 그룹 정의 및 상위 선수 추출
   const positionGroups: Record<string, string[]> = {
     "CAM": ["CAM"],
     "RAM, LAM": ["RAM", "LAM"],
@@ -109,15 +135,15 @@ export async function POST(req: NextRequest) {
     "LB": ["LB", "LWB"],
     "CB": ["CB", "LCB", "RCB", "SW"],
     "RB": ["RB", "RWB"],
-    "GK": ["GK"]
+    "GK": ["GK"],
   };
 
   const summary: Record<string, any[]> = {};
-  const userSet = new Set(userMatchResults.map(p => p.nickname));
+  const userSet = new Set(userMatchResults.map((p) => p.nickname));
 
   for (const [group, positions] of Object.entries(positionGroups)) {
-    const filtered = userMatchResults.filter(p => positions.includes(p.position));
-    const grouped: Record<string, { count: number, users: string[] }> = {};
+    const filtered = userMatchResults.filter((p) => positions.includes(p.position));
+    const grouped: Record<string, { count: number; users: string[] }> = {};
 
     for (const p of filtered) {
       const key = `${p.name} (${p.season}) - ${p.grade}카`;

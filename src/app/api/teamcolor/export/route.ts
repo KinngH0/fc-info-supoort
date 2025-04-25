@@ -2,7 +2,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 import axios from 'axios';
+import https from 'https' // 👈 여기에 추가
 
+// 👇 self-signed 인증서 무시 설정
+const agent = new https.Agent({
+  rejectUnauthorized: false,
+})
 export async function POST(req: NextRequest) {
   try {
     const { rankLimit, topN } = await req.json();
@@ -15,6 +20,7 @@ export async function POST(req: NextRequest) {
           headers: {
             'User-Agent': 'Mozilla/5.0',
           },
+          httpsAgent: agent, // ✅ 여기에 반드시 포함
         }
       );
       const dom = new JSDOM(res.data);
