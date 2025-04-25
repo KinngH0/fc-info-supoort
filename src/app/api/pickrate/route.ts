@@ -1,9 +1,10 @@
+// 📄 /src/app/api/pickrate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import https from 'https';
 
-// 👇 self-signed 인증서 무시 설정
+// ✅ self-signed 인증서 무시 설정 (Vercel 등 서버 환경 대응)
 const agent = new https.Agent({
   rejectUnauthorized: false,
 });
@@ -17,12 +18,10 @@ export async function POST(req: NextRequest) {
   const seasonMap: Record<number, string> = {};
   const positionMap: Record<number, string> = {};
 
+  // ✅ 메타데이터 요청 (선수, 시즌, 포지션)
   const fetchMeta = async (url: string) => {
     try {
-      const res = await axios.get(url, {
-        headers,
-        httpsAgent: agent, // ✅ 메타 정보도 안전하게 요청
-      });
+      const res = await axios.get(url, { headers, httpsAgent: agent });
       return res.data;
     } catch {
       return [];
@@ -45,9 +44,7 @@ export async function POST(req: NextRequest) {
   for (let page = 1; page <= pages; page++) {
     const url = `https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`;
     try {
-      const res = await axios.get(url, {
-        httpsAgent: agent, // ✅ HTML 파싱용 요청도 인증서 우회
-      });
+      const res = await axios.get(url, { httpsAgent: agent });
       const dom = new JSDOM(res.data);
       const trs = dom.window.document.querySelectorAll('.tbody .tr');
       let rank = (page - 1) * 20 + 1;
@@ -56,8 +53,8 @@ export async function POST(req: NextRequest) {
         const teamTag = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
         if (!nameTag || !teamTag) return;
         const nickname = nameTag.textContent.trim();
-        const teamColor = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
-        if (normalizedFilter === 'all' || teamColor.includes(normalizedFilter)) {
+        const color = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
+        if (normalizedFilter === 'all' || color.includes(normalizedFilter)) {
           rankedUsers.push({ nickname, rank });
         }
         rank++;
@@ -71,32 +68,24 @@ export async function POST(req: NextRequest) {
 
   for (const user of rankedUsers) {
     try {
+      const encodedNick = encodeURIComponent(user.nickname);
       const ouidRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/id?nickname=${encodeURIComponent(user.nickname)}`,
-        {
-          headers,
-          httpsAgent: agent, // ✅ ouid 조회 요청
-        }
+        `https://open.api.nexon.com/fconline/v1/id?nickname=${encodedNick}`,
+        { headers, httpsAgent: agent }
       );
       const ouid = ouidRes.data.ouid;
       if (!ouid) continue;
 
       const matchListRes = await axios.get(
         `https://open.api.nexon.com/fconline/v1/user/match?matchtype=52&ouid=${ouid}&offset=0&limit=1`,
-        {
-          headers,
-          httpsAgent: agent, // ✅ 매치 리스트 요청
-        }
+        { headers, httpsAgent: agent }
       );
       const matchId = matchListRes.data[0];
       if (!matchId) continue;
 
       const matchDetailRes = await axios.get(
         `https://open.api.nexon.com/fconline/v1/match-detail?matchid=${matchId}`,
-        {
-          headers,
-          httpsAgent: agent, // ✅ 매치 상세 요청
-        }
+        { headers, httpsAgent: agent }
       );
       const matchInfo = matchDetailRes.data.matchInfo;
 
@@ -122,7 +111,8 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch (e) {
-      console.warn(`유저 ${user.nickname} 처리 오류`, e);
+      console.warn(`유저 ${user.nickname} 처리 오류`, e?.response?.status || e.message);
+      continue;
     }
   }
 
