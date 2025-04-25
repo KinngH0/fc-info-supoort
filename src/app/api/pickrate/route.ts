@@ -1,12 +1,10 @@
-// 📄 /src/app/api/pickrate/route.ts
+// src/app/api/pickrate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import https from 'https';
 
-const agent = new https.Agent({
-  rejectUnauthorized: false,
-});
+const agent = new https.Agent({ rejectUnauthorized: false });
 
 export async function POST(req: NextRequest) {
   const { rankLimit, teamColor, topN } = await req.json();
@@ -51,8 +49,8 @@ export async function POST(req: NextRequest) {
         const teamTag = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
         if (!nameTag || !teamTag) return;
         const nickname = nameTag.textContent.trim();
-        const color = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
-        if (normalizedFilter === 'all' || color.includes(normalizedFilter)) {
+        const teamColor = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
+        if (normalizedFilter === 'all' || teamColor.includes(normalizedFilter)) {
           rankedUsers.push({ nickname, rank });
         }
         rank++;
@@ -66,25 +64,35 @@ export async function POST(req: NextRequest) {
 
   for (const user of rankedUsers) {
     try {
-      const encodedNick = encodeURIComponent(user.nickname);
-      const ouidRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/id?nickname=${encodedNick}`,
-        { headers, httpsAgent: agent }
-      );
+      const ouidRes = await axios.get('https://open.api.nexon.com/fconline/v1/id', {
+        headers,
+        httpsAgent: agent,
+        params: { nickname: user.nickname },
+        paramsSerializer: (params) => new URLSearchParams(params).toString(),
+      });
       const ouid = ouidRes.data.ouid;
       if (!ouid) continue;
 
-      const matchListRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/user/match?matchtype=52&ouid=${ouid}&offset=0&limit=1`,
-        { headers, httpsAgent: agent }
-      );
+      const matchListRes = await axios.get('https://open.api.nexon.com/fconline/v1/user/match', {
+        headers,
+        httpsAgent: agent,
+        params: {
+          matchtype: 52,
+          ouid,
+          offset: 0,
+          limit: 1,
+        },
+        paramsSerializer: (params) => new URLSearchParams(params).toString(),
+      });
       const matchId = matchListRes.data[0];
       if (!matchId) continue;
 
-      const matchDetailRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/match-detail?matchid=${matchId}`,
-        { headers, httpsAgent: agent }
-      );
+      const matchDetailRes = await axios.get('https://open.api.nexon.com/fconline/v1/match-detail', {
+        headers,
+        httpsAgent: agent,
+        params: { matchid: matchId },
+        paramsSerializer: (params) => new URLSearchParams(params).toString(),
+      });
       const matchInfo = matchDetailRes.data.matchInfo;
 
       for (const info of matchInfo) {
@@ -109,8 +117,9 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch (e: any) {
-      const status = e?.response?.status || e?.message || 'Unknown error';
-      console.warn(`유저 ${user.nickname} 처리 오류`, status);
+      const status = e?.response?.status;
+      const message = e?.response?.data?.message || e?.message;
+      console.warn(`유저 ${user.nickname} 처리 오류: [${status}] ${message}`);
       continue;
     }
   }
@@ -136,9 +145,7 @@ export async function POST(req: NextRequest) {
 
     for (const p of filtered) {
       const key = `${p.name} (${p.season}) - ${p.grade}카`;
-      if (!grouped[key]) {
-        grouped[key] = { count: 0, users: [] };
-      }
+      if (!grouped[key]) grouped[key] = { count: 0, users: [] };
       grouped[key].count++;
       grouped[key].users.push(p.nickname);
     }
