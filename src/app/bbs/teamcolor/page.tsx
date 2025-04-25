@@ -4,44 +4,36 @@ import { useState } from 'react';
 
 export default function TeamColorPage() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
-  const [startRank, setStartRank] = useState<number>(1);
-  const [endRank, setEndRank] = useState<number>(100);
+  const [date, setDate] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!date) {
+      alert('날짜를 선택해주세요.');
+      return;
+    }
+
     setLoading(true);
-    setError(null);
     
     try {
       const response = await fetch('/api/teamcolor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startRank, endRank })
+        body: JSON.stringify({ date })
       });
 
       const responseData = await response.json();
       if (responseData.error) {
-        setError(responseData.error);
+        alert(responseData.error);
       } else {
         setData(responseData);
       }
     } catch (error) {
-      setError('데이터를 불러오는 중 오류가 발생했습니다.');
+      alert('데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleStartRankChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    setStartRank(isNaN(value) ? 1 : value);
-  };
-
-  const handleEndRankChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    setEndRank(isNaN(value) ? 100 : value);
   };
 
   return (
@@ -53,31 +45,15 @@ export default function TeamColorPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="startRank" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  시작 순위
+                <label htmlFor="date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  날짜
                 </label>
                 <input
-                  type="number"
-                  id="startRank"
-                  value={startRank}
-                  onChange={handleStartRankChange}
+                  type="date"
+                  id="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
                   className="w-full px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#2A303C] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                  placeholder="시작 순위 입력"
-                  min="1"
-                />
-              </div>
-              <div>
-                <label htmlFor="endRank" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  종료 순위
-                </label>
-                <input
-                  type="number"
-                  id="endRank"
-                  value={endRank}
-                  onChange={handleEndRankChange}
-                  className="w-full px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#2A303C] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                  placeholder="종료 순위 입력"
-                  min="1"
                 />
               </div>
             </div>
@@ -92,12 +68,6 @@ export default function TeamColorPage() {
             </div>
           </form>
         </div>
-
-        {error && (
-          <div className="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-200 px-4 py-3 rounded-lg mb-8">
-            {error}
-          </div>
-        )}
 
         {data && (
           <div className="overflow-x-auto">

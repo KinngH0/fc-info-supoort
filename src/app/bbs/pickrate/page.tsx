@@ -7,18 +7,14 @@ export default function PickratePage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [sortStates, setSortStates] = useState<Record<string, { key: string; asc: boolean }>>({});
-  const [cacheKey, setCacheKey] = useState<string>('');
   const [startRank, setStartRank] = useState<number>(1);
   const [endRank, setEndRank] = useState<number>(100);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-    
+
     try {
-      // API 호출 로직
       const response = await fetch('/api/pickrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,12 +23,12 @@ export default function PickratePage() {
 
       const data = await response.json();
       if (data.error) {
-        setError(data.error);
+        alert(data.error);
       } else {
         setResult(data);
       }
-    } catch (err) {
-      setError('데이터를 불러오는 중 오류가 발생했습니다.');
+    } catch {
+      alert('데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -121,12 +117,6 @@ export default function PickratePage() {
           </form>
         </div>
 
-        {error && (
-          <div className="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-200 px-4 py-3 rounded-lg mb-8">
-            {error}
-          </div>
-        )}
-
         {result && (
           <div className="overflow-x-auto">
             <div className="inline-block min-w-full align-middle">
@@ -155,12 +145,12 @@ export default function PickratePage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-[#1E2330] divide-y divide-gray-200 dark:divide-gray-700">
-                    {Object.entries(result.summary).map(([positionGroup, players]) => (
-                      sortedPlayers(players as any[], positionGroup).map((p: any, idx: number) => {
+                    {Object.entries(result.summary).map(([positionGroup]) => (
+                      sortedPlayers(result.summary[positionGroup] as any[], positionGroup).map((p: any, idx: number) => {
                         const percent = ((p.count / result.userCount) * 100).toFixed(1);
                         return (
                           <tr key={`${positionGroup}-${idx}`} className="hover:bg-gray-50 dark:hover:bg-[#2A303C] transition-colors duration-150">
-                            {Object.entries(result.summary).map(([col, _]) => (
+                            {Object.entries(result.summary).map(([col]) => (
                               <td
                                 key={`${positionGroup}-${idx}-${col}`}
                                 className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 border-x border-gray-200 dark:border-gray-700 truncate"
