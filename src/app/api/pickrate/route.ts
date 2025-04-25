@@ -70,7 +70,7 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
           }
           rank++;
         });
-        jobs[jobId].progress = Math.round((page / pages) * 20); // 약 20%까지 반영
+        jobs[jobId].progress = Math.round((page / pages) * 20); // 20%까지 진행률 반영
       } catch (e) {
         console.warn(`페이지 ${page} 오류`, e);
       }

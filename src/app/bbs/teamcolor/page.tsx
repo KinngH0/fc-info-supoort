@@ -1,8 +1,6 @@
-// 📄 /src/app/bbs/teamcolor/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import { useState } from 'react';
 
 export default function TeamColorPage() {
   const [rankLimit, setRankLimit] = useState(10000);
@@ -10,33 +8,25 @@ export default function TeamColorPage() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
-  const [jobId, setJobId] = useState<string>('');
   const [error, setError] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
-    setError('');
     setProgress(0);
-
-    const id = uuidv4();
-    setJobId(id);
+    setError('');
 
     const res = await fetch('/api/teamcolor', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rankLimit, topN, jobId: id }),
+      body: JSON.stringify({ rankLimit, topN }),
     });
 
-    if (!res.ok) {
-      setLoading(false);
-      setError('작업 시작 실패');
-      return;
-    }
+    const { jobId } = await res.json();
 
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/teamcolor?jobId=${id}`);
+      const res = await fetch(`/api/teamcolor?jobId=${jobId}`);
       const data = await res.json();
 
       if (data.progress !== undefined) setProgress(data.progress);

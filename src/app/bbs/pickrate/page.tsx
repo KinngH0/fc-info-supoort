@@ -1,7 +1,6 @@
-// 📄 /src/app/bbs/pickrate/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export default function PickratePage() {
   const [rankLimit, setRankLimit] = useState(100);
@@ -10,7 +9,6 @@ export default function PickratePage() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string>('');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
 
@@ -19,7 +17,6 @@ export default function PickratePage() {
     setLoading(true);
     setProgress(0);
     setResult(null);
-    setJobId(null);
 
     const jobRes = await fetch('/api/pickrate', {
       method: 'POST',
@@ -27,15 +24,13 @@ export default function PickratePage() {
       body: JSON.stringify({ rankLimit, teamColor, topN })
     });
 
-    const { jobId: newJobId } = await jobRes.json();
-    setJobId(newJobId);
+    const { jobId } = await jobRes.json();
 
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/pickrate?jobId=${newJobId}`);
+      const res = await fetch(`/api/pickrate?jobId=${jobId}`);
       const data = await res.json();
 
       if (data.progress !== undefined) setProgress(data.progress);
-
       if (data.done) {
         clearInterval(interval);
         setResult(data.result);
@@ -46,7 +41,6 @@ export default function PickratePage() {
 
   const handleExport = async () => {
     if (!result) return;
-
     const res = await fetch('/api/pickrate/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -88,32 +82,13 @@ export default function PickratePage() {
     <div className="max-w-5xl mx-auto py-10 px-4 relative pt-24">
       {loading && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center z-50 text-white px-6">
-          <svg
-            className="animate-spin h-8 w-8 mb-4 text-white"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8v8z"
-            />
+          <svg className="animate-spin h-8 w-8 mb-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
           </svg>
           <p className="text-lg font-semibold mb-4">조회 중입니다. 잠시만 기다려주세요...</p>
           <div className="w-full max-w-sm h-4 bg-gray-700 rounded overflow-hidden">
-            <div
-              className="h-full bg-blue-500 transition-all duration-300 ease-out"
-              style={{ width: `${progress}%` }}
-            ></div>
+            <div className="h-full bg-blue-500 transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
           </div>
           <p className="mt-2 text-sm text-gray-300">{progress}% 완료</p>
         </div>
