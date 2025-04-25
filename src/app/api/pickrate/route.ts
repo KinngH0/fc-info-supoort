@@ -4,7 +4,10 @@ import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import https from 'https';
 
-const agent = new https.Agent({ rejectUnauthorized: false });
+// 👇 self-signed 인증서 무시 설정
+const agent = new https.Agent({
+  rejectUnauthorized: false,
+});
 
 export async function POST(req: NextRequest) {
   const { rankLimit, teamColor, topN } = await req.json();
@@ -17,13 +20,9 @@ export async function POST(req: NextRequest) {
 
   const fetchMeta = async (url: string) => {
     try {
-      const res = await axios.get(url, {
-        headers,
-        httpsAgent: agent,
-      });
+      const res = await axios.get(url, { headers, httpsAgent: agent });
       return res.data;
-    } catch (err: any) {
-      console.warn('⚠️ 메타데이터 로딩 실패:', err.message);
+    } catch {
       return [];
     }
   };
@@ -68,27 +67,44 @@ export async function POST(req: NextRequest) {
 
   for (const user of rankedUsers) {
     try {
-      const ouidRes = await axios.get(`https://open.api.nexon.com/fconline/v1/id`, {
-        headers,
-        httpsAgent: agent,
-        params: { nickname: encodeURIComponent(user.nickname) },
-      });
+      const ouidRes = await axios.get(
+        `https://open.api.nexon.com/fconline/v1/id`,
+        {
+          headers,
+          httpsAgent: agent,
+          params: { nickname: user.nickname }, // ✅ 인코딩 없이 전달
+        }
+      );
+
       const ouid = ouidRes.data.ouid;
       if (!ouid) continue;
 
-      const matchListRes = await axios.get(`https://open.api.nexon.com/fconline/v1/user/match`, {
-        headers,
-        httpsAgent: agent,
-        params: { ouid, matchtype: 52, offset: 0, limit: 1 },
-      });
+      const matchListRes = await axios.get(
+        `https://open.api.nexon.com/fconline/v1/user/match`,
+        {
+          headers,
+          httpsAgent: agent,
+          params: {
+            matchtype: 52,
+            ouid,
+            offset: 0,
+            limit: 1,
+          },
+        }
+      );
+
       const matchId = matchListRes.data[0];
       if (!matchId) continue;
 
-      const matchDetailRes = await axios.get(`https://open.api.nexon.com/fconline/v1/match-detail`, {
-        headers,
-        httpsAgent: agent,
-        params: { matchid: matchId },
-      });
+      const matchDetailRes = await axios.get(
+        `https://open.api.nexon.com/fconline/v1/match-detail`,
+        {
+          headers,
+          httpsAgent: agent,
+          params: { matchid: matchId },
+        }
+      );
+
       const matchInfo = matchDetailRes.data.matchInfo;
 
       for (const info of matchInfo) {
@@ -113,22 +129,23 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch (e: any) {
-      const status = e?.response?.status || '??';
-      const resData = e?.response?.data || '(no response data)';
-      console.warn(`유저 ${user.nickname} 처리 오류: [${status}]`, resData);
+      const status = e?.response?.status;
+      const message = e?.response?.data?.error?.message || e.message;
+      console.warn(`유저 ${user.nickname} 처리 오류: [${status}] ${message}`);
+      continue;
     }
   }
 
   const positionGroups: Record<string, string[]> = {
-    'CAM': ['CAM'],
-    'RAM, LAM': ['RAM', 'LAM'],
-    'RM, LM': ['RM', 'LM'],
-    'CM': ['CM', 'LCM', 'RCM'],
-    'CDM': ['CDM', 'LDM', 'RDM'],
-    'LB': ['LB', 'LWB'],
-    'CB': ['CB', 'LCB', 'RCB', 'SW'],
-    'RB': ['RB', 'RWB'],
-    'GK': ['GK'],
+    "CAM": ["CAM"],
+    "RAM, LAM": ["RAM", "LAM"],
+    "RM, LM": ["RM", "LM"],
+    "CM": ["CM", "LCM", "RCM"],
+    "CDM": ["CDM", "LDM", "RDM"],
+    "LB": ["LB", "LWB"],
+    "CB": ["CB", "LCB", "RCB", "SW"],
+    "RB": ["RB", "RWB"],
+    "GK": ["GK"],
   };
 
   const summary: Record<string, any[]> = {};
@@ -140,7 +157,9 @@ export async function POST(req: NextRequest) {
 
     for (const p of filtered) {
       const key = `${p.name} (${p.season}) - ${p.grade}카`;
-      if (!grouped[key]) grouped[key] = { count: 0, users: [] };
+      if (!grouped[key]) {
+        grouped[key] = { count: 0, users: [] };
+      }
       grouped[key].count++;
       grouped[key].users.push(p.nickname);
     }
