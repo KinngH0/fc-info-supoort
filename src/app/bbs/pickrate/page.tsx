@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function PickratePage() {
   const [rankLimit, setRankLimit] = useState(100);
