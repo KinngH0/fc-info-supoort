@@ -5,17 +5,19 @@ import { useState } from 'react';
 
 export default function EfficiencyPage() {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
   const [date, setDate] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date) {
-      alert('날짜를 선택해주세요.');
+      setError('날짜를 선택해주세요.');
       return;
     }
 
     setLoading(true);
+    setError(null);
     
     try {
       const response = await fetch('/api/efficiency', {
@@ -26,12 +28,12 @@ export default function EfficiencyPage() {
 
       const responseData = await response.json();
       if (responseData.error) {
-        alert(responseData.error);
+        setError(responseData.error);
       } else {
         setData(responseData);
       }
-    } catch {
-      alert('데이터를 불러오는 중 오류가 발생했습니다.');
+    } catch (error) {
+      setError('데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -67,6 +69,12 @@ export default function EfficiencyPage() {
             </div>
           </form>
         </div>
+
+        {error && (
+          <div className="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-200 px-4 py-3 rounded-lg mb-8">
+            {error}
+          </div>
+        )}
 
         {data && (
           <div className="overflow-x-auto">
