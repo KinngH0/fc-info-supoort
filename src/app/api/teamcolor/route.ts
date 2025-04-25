@@ -3,12 +3,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
 import axios from 'axios';
 
-// 캐시 설정
-const CACHE_DURATION = 60 * 60 * 1000; // 1시간
+// 캐시 설정 (2시간으로 증가)
+const CACHE_DURATION = 2 * 60 * 60 * 1000;
 const cache = new Map<string, { data: any; timestamp: number }>();
 
-// 병렬 처리를 위한 배치 크기
-const BATCH_SIZE = 5;
+// 병렬 처리를 위한 배치 크기 대폭 증가
+const BATCH_SIZE = 20;
+
+// 재시도 설정
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
 
 interface TeamColorData {
   count: number;
@@ -21,16 +25,24 @@ interface TeamColorData {
   users: string[];
 }
 
-// 페이지 데이터 가져오기
-async function fetchPage(page: number): Promise<any[]> {
+// axios 인스턴스 생성 및 최적화
+const axiosInstance = axios.create({
+  headers: {
+    'User-Agent': 'Mozilla/5.0',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Connection': 'keep-alive',
+  },
+  timeout: 30000, // 30초로 증가
+  httpAgent: new (require('http').Agent)({ keepAlive: true }),
+  httpsAgent: new (require('https').Agent)({ keepAlive: true })
+});
+
+// 재시도 로직이 포함된 페이지 데이터 가져오기
+async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
   try {
-    const res = await axios.get(
-      `https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-        },
-      }
+    const res = await axiosInstance.get(
+      `https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`
     );
 
     const dom = new JSDOM(res.data);
@@ -58,35 +70,51 @@ async function fetchPage(page: number): Promise<any[]> {
       };
     });
   } catch (error) {
-    console.error(`Error fetching page ${page}:`, error);
+    if (retries < MAX_RETRIES) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return fetchPageWithRetry(page, retries + 1);
+    }
+    console.error(`Failed to fetch page ${page} after ${MAX_RETRIES} retries:`, error);
     return [];
   }
 }
 
-// 병렬로 페이지 데이터 가져오기
+// 병렬로 페이지 데이터 가져오기 (최적화)
 async function fetchPages(startPage: number, endPage: number): Promise<any[]> {
   const pages = [];
+  const chunks = [];
+  
+  // 청크 단위로 나누기
   for (let i = startPage; i <= endPage; i += BATCH_SIZE) {
+    const end = Math.min(i + BATCH_SIZE - 1, endPage);
+    chunks.push({ start: i, end });
+  }
+
+  // 청크 단위로 병렬 처리
+  for (const chunk of chunks) {
     const batch = [];
-    for (let j = 0; j < BATCH_SIZE && i + j <= endPage; j++) {
-      batch.push(fetchPage(i + j));
+    for (let page = chunk.start; page <= chunk.end; page++) {
+      batch.push(fetchPageWithRetry(page));
     }
     const results = await Promise.all(batch);
     pages.push(...results.flat());
     
-    // 크롤링 간격 조절
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // 청크 사이 딜레이 (100ms로 단축)
+    if (chunk.end !== endPage) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
   }
+  
   return pages;
 }
 
-// 팀컬러별 데이터 처리
+// 팀컬러별 데이터 처리 (메모리 최적화)
 function processTeamColorData(users: any[], topN: number) {
   const teamColors = new Map<string, TeamColorData>();
 
   // 팀컬러별 데이터 수집
-  users.forEach(user => {
-    if (!user.teamColor) return;
+  for (const user of users) {
+    if (!user.teamColor) continue;
 
     if (!teamColors.has(user.teamColor)) {
       teamColors.set(user.teamColor, {
@@ -108,7 +136,6 @@ function processTeamColorData(users: any[], topN: number) {
     data.totalScore += user.score;
     data.users.push(user.nickname);
 
-    // 최대/최소 가치 업데이트
     if (user.value > data.maxValue.value) {
       data.maxValue = {
         value: user.value,
@@ -124,17 +151,16 @@ function processTeamColorData(users: any[], topN: number) {
       };
     }
 
-    // 포메이션 카운트
     if (user.formation) {
       data.formations.set(
         user.formation,
         (data.formations.get(user.formation) || 0) + 1
       );
     }
-  });
+  }
 
-  // 결과 정렬 및 포맷팅
-  const result = Array.from(teamColors.entries())
+  // 결과 정렬 및 포맷팅 (메모리 최적화)
+  return Array.from(teamColors.entries())
     .map(([teamColor, data]) => ({
       teamColor,
       count: data.count,
@@ -154,11 +180,8 @@ function processTeamColorData(users: any[], topN: number) {
     }))
     .sort((a, b) => b.count - a.count)
     .slice(0, topN);
-
-  return result;
 }
 
-// 숫자 포맷팅 (예: 1000000 -> 1,000,000)
 function formatValue(value: number): string {
   return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
@@ -167,29 +190,20 @@ export async function POST(req: NextRequest) {
   try {
     const { rankLimit, topN } = await req.json();
 
-    // 캐시 키 생성
     const cacheKey = `teamcolor-${rankLimit}-${topN}`;
     const now = Date.now();
 
-    // 캐시된 데이터 확인
     const cached = cache.get(cacheKey);
     if (cached && now - cached.timestamp < CACHE_DURATION) {
       return NextResponse.json(cached.data);
     }
 
-    // 총 페이지 수 계산
     const totalPages = Math.ceil(rankLimit / 20);
-
-    // 병렬로 데이터 가져오기
     const allUsers = await fetchPages(1, totalPages);
     const limitedUsers = allUsers.slice(0, rankLimit);
-
-    // 팀컬러별 데이터 처리
     const result = processTeamColorData(limitedUsers, topN);
 
-    // 결과 캐싱
     cache.set(cacheKey, { data: result, timestamp: now });
-
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('Error in teamcolor API:', error);
@@ -198,15 +212,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const jobId = searchParams.get('jobId');
-  if (!jobId || !jobStore.has(jobId)) {
-    return NextResponse.json({ error: 'Invalid jobId' }, { status: 400 });
-  }
-
-  const result = jobStore.get(jobId);
-  return NextResponse.json(result);
 }
