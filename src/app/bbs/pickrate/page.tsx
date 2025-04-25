@@ -123,7 +123,7 @@ export default function PickratePage() {
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-[#1E2330]">
                     <tr>
-                      {Object.entries(result.summary).map(([positionGroup, players]) => (
+                      {Object.entries(result.summary).map(([positionGroup]) => (
                         <th
                           key={positionGroup}
                           scope="col"
