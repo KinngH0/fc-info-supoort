@@ -13,6 +13,17 @@ const cache = new Map<string, { data: any; timestamp: number }>();
 // 병렬 처리를 위한 배치 크기
 const BATCH_SIZE = 5;
 
+interface TeamColorData {
+  count: number;
+  totalValue: number;
+  totalRank: number;
+  totalScore: number;
+  maxValue: { value: number; nickname: string; display: string };
+  minValue: { value: number; nickname: string; display: string };
+  formations: Map<string, number>;
+  users: string[];
+}
+
 // 페이지 데이터 가져오기
 async function fetchPage(page: number): Promise<any[]> {
   try {
@@ -75,7 +86,7 @@ async function fetchPages(startPage: number, endPage: number): Promise<any[]> {
 
 // 팀컬러별 데이터 처리
 function processTeamColorData(users: any[], topN: number) {
-  const teamColors = new Map<string, any>();
+  const teamColors = new Map<string, TeamColorData>();
 
   // 팀컬러별 데이터 수집
   users.forEach(user => {
@@ -94,7 +105,7 @@ function processTeamColorData(users: any[], topN: number) {
       });
     }
 
-    const data = teamColors.get(user.teamColor);
+    const data = teamColors.get(user.teamColor)!;
     data.count++;
     data.totalValue += user.value;
     data.totalRank += user.rank;
@@ -138,7 +149,7 @@ function processTeamColorData(users: any[], topN: number) {
       maxValue: data.maxValue,
       minValue: data.minValue,
       topFormations: Array.from(data.formations.entries())
-        .sort((a, b) => b[1] - a[1])
+        .sort((a, b) => (b[1] as number) - (a[1] as number))
         .slice(0, 3)
         .map(([form, count]) => ({
           form,
