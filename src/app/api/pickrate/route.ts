@@ -6,14 +6,12 @@ import https from 'https';
 
 const agent = new https.Agent({ rejectUnauthorized: false });
 
+const ouidCache = new Map<string, string>();
+
 export async function POST(req: NextRequest) {
   const { rankLimit, teamColor, topN } = await req.json();
   const normalizedFilter = teamColor.replace(/\s/g, '').toLowerCase();
-  const headers = {
-    'x-nxopen-api-key': process.env.FC_API_KEY!,
-    'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0'
-  };
+  const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
 
   const spidMap: Record<number, string> = {};
   const seasonMap: Record<number, string> = {};
@@ -66,67 +64,74 @@ export async function POST(req: NextRequest) {
 
   const userMatchResults: any[] = [];
 
-  for (const user of rankedUsers) {
-    const nicknameClean = user.nickname.trim().replace(/\u200B/g, '');
-    const nicknameEncoded = encodeURIComponent(nicknameClean);
+  await Promise.allSettled(
+    rankedUsers.map(async (user) => {
+      try {
+        const nickname = user.nickname;
+        let ouid = ouidCache.get(nickname);
 
-    try {
-      const ouidRes = await axios.get(
-        `https://open.api.nexon.com/fconline/v1/id?nickname=${nicknameEncoded}`,
-        { headers, httpsAgent: agent }
-      );
-
-      const ouid = ouidRes.data.ouid;
-      if (!ouid) continue;
-
-      const matchListRes = await axios.get(
-        'https://open.api.nexon.com/fconline/v1/user/match',
-        {
-          params: { matchtype: 52, ouid, offset: 0, limit: 1 },
-          headers,
-          httpsAgent: agent
+        if (!ouid) {
+          const ouidRes = await axios.get(
+            'https://open.api.nexon.com/fconline/v1/id',
+            {
+              params: { nickname },
+              headers,
+              httpsAgent: agent
+            }
+          );
+          ouid = ouidRes.data.ouid;
+          if (!ouid) return;
+          ouidCache.set(nickname, ouid);
         }
-      );
-      const matchId = matchListRes.data[0];
-      if (!matchId) continue;
 
-      const matchDetailRes = await axios.get(
-        'https://open.api.nexon.com/fconline/v1/match-detail',
-        {
-          params: { matchid: matchId },
-          headers,
-          httpsAgent: agent
+        const matchListRes = await axios.get(
+          'https://open.api.nexon.com/fconline/v1/user/match',
+          {
+            params: { matchtype: 52, ouid, offset: 0, limit: 1 },
+            headers,
+            httpsAgent: agent
+          }
+        );
+        const matchId = matchListRes.data[0];
+        if (!matchId) return;
+
+        const matchDetailRes = await axios.get(
+          'https://open.api.nexon.com/fconline/v1/match-detail',
+          {
+            params: { matchid: matchId },
+            headers,
+            httpsAgent: agent
+          }
+        );
+        const matchInfo = matchDetailRes.data.matchInfo;
+
+        for (const info of matchInfo) {
+          if (info.ouid !== ouid) continue;
+          for (const player of info.player || []) {
+            if (player.spPosition === 28) continue;
+
+            const spId = player.spId;
+            const grade = player.spGrade;
+            const position = positionMap[player.spPosition] || `pos${player.spPosition}`;
+            const seasonId = parseInt(String(spId).slice(0, 3));
+            const name = spidMap[spId] || `(Unknown:${spId})`;
+            const season = seasonMap[seasonId] || `${seasonId}`;
+
+            userMatchResults.push({
+              nickname,
+              position,
+              name,
+              season,
+              grade
+            });
+          }
         }
-      );
-      const matchInfo = matchDetailRes.data.matchInfo;
-
-      for (const info of matchInfo) {
-        if (info.ouid !== ouid) continue;
-        for (const player of info.player || []) {
-          if (player.spPosition === 28) continue;
-
-          const spId = player.spId;
-          const grade = player.spGrade;
-          const position = positionMap[player.spPosition] || `pos${player.spPosition}`;
-          const seasonId = parseInt(String(spId).slice(0, 3));
-          const name = spidMap[spId] || `(Unknown:${spId})`;
-          const season = seasonMap[seasonId] || `${seasonId}`;
-
-          userMatchResults.push({
-            nickname: user.nickname,
-            position,
-            name,
-            season,
-            grade
-          });
-        }
+      } catch (e: any) {
+        const msg = e?.response?.data?.error?.message || e?.message || e;
+        console.warn(`유저 ${user.nickname} 처리 오류: [${e?.response?.status || '??'}] ${msg}`);
       }
-    } catch (e: any) {
-      const msg = e?.response?.data?.error?.message || e?.message || e;
-      const status = e?.response?.status || '???';
-      console.warn(`유저 ${user.nickname} 처리 오류: [${status}] ${msg}`);
-    }
-  }
+    })
+  );
 
   const positionGroups: Record<string, string[]> = {
     'CAM': ['CAM'],
@@ -145,17 +150,22 @@ export async function POST(req: NextRequest) {
 
   for (const [group, positions] of Object.entries(positionGroups)) {
     const filtered = userMatchResults.filter((p) => positions.includes(p.position));
-    const grouped: Record<string, { count: number; users: string[] }> = {};
+    const grouped: Record<string, { count: number; users: string[]; meta: { name: string; season: string; grade: number } }> = {};
 
     for (const p of filtered) {
-      const key = `${p.name} (${p.season}) - ${p.grade}카`;
-      if (!grouped[key]) grouped[key] = { count: 0, users: [] };
+      const key = `${p.name}_${p.season}_${p.grade}`;
+      if (!grouped[key]) grouped[key] = { count: 0, users: [], meta: { name: p.name, season: p.season, grade: p.grade } };
       grouped[key].count++;
       grouped[key].users.push(p.nickname);
     }
 
     const sorted = Object.entries(grouped)
-      .map(([k, v]) => ({ name: k, count: v.count, users: v.users }))
+      .map(([_, v]) => ({
+        ...v.meta,
+        count: v.count,
+        users: v.users,
+        ratio: ((v.count / userSet.size) * 100).toFixed(1)
+      }))
       .sort((a, b) => b.count - a.count)
       .slice(0, topN);
 
