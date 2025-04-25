@@ -20,13 +20,13 @@ const Header = () => {
                 aria-label="홈으로 이동"
               >
                 <Image
-                  src="/logo.png"
+                  src="/img/logo.png"
                   alt="FC INFO SUPPORT 로고"
-                  width={32}
-                  height={32}
-                  className="rounded-lg"
+                  width={180}
+                  height={40}
+                  className="h-10 w-auto"
+                  priority
                 />
-                <span>FC INFO SUPPORT</span>
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
