@@ -571,6 +571,10 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
     
     for (let i = 0; i < pages; i += batchSize) {
       const currentBatch = Math.min(batchSize, pages - i);
+      const currentPage = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(pages / batchSize);
+      updateProgress(5 + Math.round((i / pages) * 30), `랭킹 데이터 수집 중 (${currentPage}/${totalBatches} 페이지)`);
+
       const pagePromises = Array.from({ length: currentBatch }, (_, j) => {
         const page = i + j + 1;
         return axiosWithRetry.get(`https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`, {
@@ -651,13 +655,18 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
     const averageTeamValue = teamValueCount > 0 ? Math.round(totalTeamValue / teamValueCount) : 0;
 
     // 매치 데이터 수집 최적화 (35-85%)
-    updateProgress(35, '매치 데이터 수집 중...');
-    const userBatchSize = 50; // 병렬 처리 배치 크기 증가
+    updateProgress(35, '매치 데이터 수집 준비 중...');
+    const userBatchSize = 50;
     const userMatchResults: any[] = [];
     const processedUsers = new Set<string>();
 
     for (let i = 0; i < rankedUsers.length; i += userBatchSize) {
       const batch = rankedUsers.slice(i, Math.min(i + userBatchSize, rankedUsers.length));
+      const currentBatch = Math.floor(i / userBatchSize) + 1;
+      const totalBatches = Math.ceil(rankedUsers.length / userBatchSize);
+      updateProgress(35 + Math.round((i / rankedUsers.length) * 50), 
+        `매치 데이터 수집 중 (${currentBatch}/${totalBatches} 배치, ${i + 1}/${rankedUsers.length}명)`);
+
       const batchPromises = batch
         .filter(user => !processedUsers.has(user.nickname))
         .map(user => {
@@ -699,9 +708,6 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
           }
         }
       });
-
-      const matchProgress = 35 + Math.round((i / rankedUsers.length) * 50);
-      updateProgress(matchProgress, '매치 데이터 수집 중...');
       
       // 배치 간 딜레이 감소
       if (i + userBatchSize < rankedUsers.length) {
