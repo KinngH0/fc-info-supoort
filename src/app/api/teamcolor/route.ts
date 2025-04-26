@@ -118,7 +118,7 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       const teamColorElement = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
       const teamColor = teamColorElement?.textContent?.replace(/\(.*?\)/g, '').trim() || '';
       
-      // 구단가치 파싱 로직 완전 개선
+      // 구단가치 파싱 로직 수정
       let value = 0;
       const priceElement = tr.querySelector('.rank_coach .price');
       if (priceElement) {
