@@ -247,19 +247,26 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       return;
     }
 
-    // 초기 진행률 업데이트
-    updateProgress(1);
+    // 초기 진행률은 0%에서 시작
+    updateProgress(0);
 
     const normalizedFilter = teamColor.replace(/\s/g, '').toLowerCase();
     const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
-    const metaData = await loadMetaData();
     
-    updateProgress(5);
+    // 메타데이터 로드 시작
+    updateProgress(0);
+    const metaData = await loadMetaData();
+    updateProgress(2); // 메타데이터 로드 완료
 
     // 랭킹 데이터 수집 (병렬 처리 개선)
     const pages = Math.ceil(rankLimit / 20);
     const rankedUsers: { nickname: string; rank: number }[] = [];
     const batchSize = 5;
+    
+    // 전체 진행률 분배
+    // - 랭킹 데이터 수집: 0-30%
+    // - 매치 데이터 수집: 30-80%
+    // - 데이터 처리 및 정리: 80-99%
     
     for (let i = 0; i < pages; i += batchSize) {
       const currentBatch = Math.min(batchSize, pages - i);
@@ -270,7 +277,7 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
         pagePromises.push(
           axios.get(`https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`, { 
             httpsAgent: agent,
-            timeout: 10000 // 10초 타임아웃 설정
+            timeout: 10000
           })
           .then(res => {
             const dom = new JSDOM(res.data);
@@ -298,17 +305,17 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       }
       
       await Promise.all(pagePromises);
-      const progress = Math.min(30, 5 + Math.round((i / pages) * 25));
-      updateProgress(progress);
+      // 랭킹 데이터 수집 진행률 (0-30%)
+      const rankProgress = Math.round((i / pages) * 30);
+      updateProgress(rankProgress);
       
-      // API 호출 간 딜레이
       if (i + batchSize < pages) {
         await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
 
     // 매치 데이터 수집 (병렬 처리 개선)
-    const userBatchSize = 20; // 한 번에 처리할 유저 수
+    const userBatchSize = 20;
     const userMatchResults: any[] = [];
     const processedUsers = new Set<string>();
 
@@ -351,13 +358,17 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
         }
       });
 
-      jobs[jobId].progress = 20 + Math.round(((i + batch.length) / rankedUsers.length) * 60);
+      // 매치 데이터 수집 진행률 (30-80%)
+      const matchProgress = 30 + Math.round((i / rankedUsers.length) * 50);
+      updateProgress(matchProgress);
       
-      // API 호출 간 딜레이
       if (i + userBatchSize < rankedUsers.length) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
+
+    // 데이터 처리 시작 (80-99%)
+    updateProgress(80);
 
     // 포지션별 데이터 처리 최적화
     const positionGroups: Record<string, string[]> = {
@@ -413,8 +424,9 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       summary
     };
 
-    // 결과 캐싱
+    // 결과 캐싱 및 완료
     setCache(cacheKey, result);
+    updateProgress(99); // 최종 진행률
 
     jobs[jobId] = {
       status: 'done',
