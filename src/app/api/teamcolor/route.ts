@@ -58,7 +58,7 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
         .querySelector('.td.team_color .name .inner')
         ?.textContent?.replace(/\(.*?\)/g, '')
         .trim() || '';
-        const valueRaw = tr.querySelector('.rank_coach .price')?.getAttribute('title') || '0';
+        const valueRaw = tr.querySelector('.td.value')?.textContent?.trim().replace(/[^0-9]/g, '') || '0';
         const formation = tr.querySelector('.td.formation')?.textContent?.trim() || '';
         const rankText = tr.querySelector('.rank_no')?.textContent?.trim() || '0';
         const scoreText = tr.querySelector('.td.rank_r_win_point')?.textContent?.trim() || '0';
@@ -66,7 +66,7 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       return {
           nickname,
           teamColor,
-        value: parseInt(valueRaw.replace(/,/g, ''), 10) || 0,
+        value: parseInt(valueRaw, 10) || 0,
         rank: parseInt(rankText, 10) || 0,
         score: parseInt(scoreText, 10) || 0,
           formation,
