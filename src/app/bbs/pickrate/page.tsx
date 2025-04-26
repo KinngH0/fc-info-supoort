@@ -3,9 +3,9 @@
 import { useState, useCallback, useEffect } from 'react';
 
 export default function PickratePage() {
-  const [rankLimit, setRankLimit] = useState(100);
-  const [teamColor, setTeamColor] = useState('all');
-  const [topN, setTopN] = useState(5);
+  const [rankLimit, setRankLimit] = useState('');
+  const [teamColor, setTeamColor] = useState('');
+  const [topN, setTopN] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
@@ -46,9 +46,15 @@ export default function PickratePage() {
   // 입력창 클릭 시 초기화 핸들러
   const handleInputClick = useCallback((e: React.MouseEvent<HTMLInputElement>) => {
     const input = e.target as HTMLInputElement;
-    input.value = '';
-    if (input.name === 'teamColor') {
-      setShowSuggestions(true);
+    setShowSuggestions(input.name === 'teamColor');
+    
+    // 각 입력창의 상태값 초기화
+    if (input.name === 'rankLimit') {
+      setRankLimit('');
+    } else if (input.name === 'teamColor') {
+      setTeamColor('');
+    } else if (input.name === 'topN') {
+      setTopN('');
     }
   }, []);
 
@@ -205,8 +211,9 @@ export default function PickratePage() {
             className="w-full p-2 rounded border dark:bg-gray-700"
             value={rankLimit}
             onChange={(e) => handleInputChange(e, setRankLimit)}
-            placeholder="몇 위까지의 데이터를 조회할지 입력해 주세요"
+            placeholder="몇 위까지 조회할지 범위 지정"
             onClick={handleInputClick}
+            name="rankLimit"
             required
             min="1"
             max="1000"
@@ -214,14 +221,14 @@ export default function PickratePage() {
         </div>
 
         <div className="relative">
-          <label className="block mb-1 font-medium">팀 컬러 필터 (예: 리버풀 / all)</label>
+          <label className="block mb-1 font-medium">팀 컬러 필터</label>
           <input
             type="text"
             className="w-full p-2 rounded border dark:bg-gray-700"
             value={teamColor}
             onChange={handleTeamColorChange}
             onClick={handleInputClick}
-            placeholder="조회할 팀 컬러를 입력해 주세요"
+            placeholder="조회할 팀컬러 지정"
             name="teamColor"
             required
           />
@@ -249,8 +256,9 @@ export default function PickratePage() {
             className="w-full p-2 rounded border dark:bg-gray-700"
             value={topN}
             onChange={(e) => handleInputChange(e, setTopN)}
-            placeholder="포지션별로 상위 몇 명까지 표시할지 입력해 주세요"
+            placeholder="포지션별 몇 위까지 출력할지 지정"
             onClick={handleInputClick}
+            name="topN"
             required
             min="1"
             max="20"
