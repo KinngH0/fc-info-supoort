@@ -8,6 +8,7 @@ export default function PickratePage() {
   const [topN, setTopN] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
   const [result, setResult] = useState<any>(null);
   const [sortStates, setSortStates] = useState<Record<string, { key: string; asc: boolean }>>({});
   const [cacheKey, setCacheKey] = useState<string>('');
@@ -88,6 +89,7 @@ export default function PickratePage() {
 
     setLoading(true);
     setProgress(0);
+    setProgressMessage('');
     setResult(null);
 
     try {
@@ -104,7 +106,10 @@ export default function PickratePage() {
           const res = await fetch(`/api/pickrate?jobId=${jobId}`);
           const data = await res.json();
 
-          if (data.progress !== undefined) setProgress(data.progress);
+          if (data.progress !== undefined) {
+            setProgress(data.progress);
+            setProgressMessage(data.message || '데이터 수집 중');
+          }
           if (data.done) {
             clearInterval(interval);
             setResult(data.result);
@@ -196,7 +201,7 @@ export default function PickratePage() {
           <div className="w-full max-w-sm h-4 bg-gray-700 rounded overflow-hidden">
             <div className="h-full bg-blue-500 transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
           </div>
-          <p className="mt-2 text-sm text-gray-300">{progress}% 완료되었습니다</p>
+          <p className="mt-2 text-sm text-gray-300">{progress}% - {progressMessage}</p>
         </div>
       )}
 
@@ -205,7 +210,7 @@ export default function PickratePage() {
 
       <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow mb-10 space-y-4">
         <div>
-          <label className="block mb-1 font-medium">조회할 랭커 수 (예: 100)</label>
+          <label className="block mb-1 font-medium">조회할 랭커 수</label>
           <input
             type="number"
             className="w-full p-2 rounded border dark:bg-gray-700"
@@ -250,7 +255,7 @@ export default function PickratePage() {
         </div>
 
         <div>
-          <label className="block mb-1 font-medium">포지션별 상위 선수 수 (예: 5)</label>
+          <label className="block mb-1 font-medium">포지션별 상위 선수 수</label>
           <input
             type="number"
             className="w-full p-2 rounded border dark:bg-gray-700"
