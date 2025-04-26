@@ -596,7 +596,8 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
             const nickname = nameTag.textContent.trim();
             const team = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
             const formation = formationTag ? formationTag.textContent.trim() : '';
-            const teamValue = teamValueTag ? parseInt(teamValueTag.textContent.replace(/[^0-9]/g, '')) : 0;
+            const teamValueText = teamValueTag ? teamValueTag.textContent.trim() : '';
+            const teamValue = teamValueText ? parseInt(teamValueText.replace(/[^0-9]/g, '')) : 0;
 
             if (normalizedFilter === 'all' || team.includes(normalizedFilter)) {
               // 포메이션 통계 수집

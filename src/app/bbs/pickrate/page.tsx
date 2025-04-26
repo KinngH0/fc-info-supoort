@@ -291,29 +291,44 @@ export default function PickratePage() {
 
           <div className="space-y-8">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-              <h2 className="text-lg font-bold mb-4">팀 정보 요약</h2>
+              <h2 className="text-lg font-bold mb-4 border-b pb-2">팀 정보 요약</h2>
               
               {/* 최고 랭커 정보 */}
               {result.topRanker && (
                 <div className="mb-6">
-                  <h3 className="font-semibold mb-2">최고 랭커</h3>
-                  <p>닉네임: <span className="font-medium">{result.topRanker.nickname}</span> ({result.topRanker.rank}위)</p>
-                  <p>포메이션: {result.topRanker.formation}</p>
-                  <p>구단가치: {result.topRanker.teamValue?.toLocaleString() ?? 0}억</p>
+                  <h3 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">최고 랭커</h3>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm">닉네임</p>
+                        <p className="font-medium">{result.topRanker.nickname} ({result.topRanker.rank}위)</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm">포메이션</p>
+                        <p className="font-medium">{result.topRanker.formation || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm">구단가치</p>
+                        <p className="font-medium">{result.topRanker.teamValue ? `${result.topRanker.teamValue.toLocaleString()}억` : '-'}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* 포메이션 통계 */}
               {result.formations && result.formations.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="font-semibold mb-2">포메이션 통계</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {result.formations.slice(0, 6).map((f: FormationStat, idx: number) => (
-                      <div key={idx} className="flex justify-between">
-                        <span>{f.formation}</span>
-                        <span>{f.percentage}% ({f.count}명)</span>
-                      </div>
-                    ))}
+                  <h3 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">포메이션 통계</h3>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4">
+                      {result.formations.slice(0, 6).map((f: FormationStat, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center py-1">
+                          <span className="font-medium">{f.formation}</span>
+                          <span className="text-gray-600 dark:text-gray-400">{f.percentage}% ({f.count}명)</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -321,10 +336,29 @@ export default function PickratePage() {
               {/* 구단가치 통계 */}
               {result.teamValue && (
                 <div>
-                  <h3 className="font-semibold mb-2">구단가치 통계</h3>
-                  <p>평균: {result.teamValue.average?.toLocaleString() ?? 0}억</p>
-                  <p>최고: {result.teamValue.max?.value?.toLocaleString() ?? 0}억 ({result.teamValue.max?.nickname})</p>
-                  <p>최저: {result.teamValue.min?.value?.toLocaleString() ?? 0}억 ({result.teamValue.min?.nickname})</p>
+                  <h3 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">구단가치 통계</h3>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm">평균</p>
+                        <p className="font-medium">{result.teamValue.average ? `${result.teamValue.average.toLocaleString()}억` : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm">최고</p>
+                        <p className="font-medium">
+                          {result.teamValue.max?.value ? `${result.teamValue.max.value.toLocaleString()}억` : '-'}
+                          {result.teamValue.max?.nickname && ` (${result.teamValue.max.nickname})`}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm">최저</p>
+                        <p className="font-medium">
+                          {result.teamValue.min?.value ? `${result.teamValue.min.value.toLocaleString()}억` : '-'}
+                          {result.teamValue.min?.nickname && ` (${result.teamValue.min.nickname})`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
