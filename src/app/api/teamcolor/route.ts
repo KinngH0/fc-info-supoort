@@ -119,12 +119,12 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       const teamColor = teamColorElement?.textContent?.replace(/\(.*?\)/g, '').trim() || '';
       
       // 구단가치 파싱 로직 개선
-      const valueElement = tr.querySelector('.td.price');
+      const valueElement = tr.querySelector('span.price');
       let value = 0;
       if (valueElement) {
-        const valueText = valueElement.textContent?.trim() || '0';
-        // 숫자만 추출 (억 단위 제거)
-        const numericValue = valueText.replace(/[^0-9.]/g, '');
+        const valueText = valueElement.getAttribute('alt') || '0';
+        // 콤마 제거 후 숫자만 추출
+        const numericValue = valueText.replace(/,/g, '');
         value = parseFloat(numericValue) || 0;
         
         // 디버그 로깅
