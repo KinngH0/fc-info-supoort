@@ -10,7 +10,7 @@ const CACHE_DURATION = 2 * 60 * 60 * 1000;
 const cache = new Map<string, { data: any; timestamp: number }>();
 
 // 병렬 처리를 위한 배치 크기 대폭 증가
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 30;
 
 // 재시도 설정
 const MAX_RETRIES = 3;
@@ -21,10 +21,11 @@ interface TeamColorData {
   totalValue: number;
   totalRank: number;
   totalScore: number;
-  maxValue: { value: number; nickname: string; display: string };
-  minValue: { value: number; nickname: string; display: string };
+  maxValue: { value: number; nickname: string; display: string; rank: number };
+  minValue: { value: number; nickname: string; display: string; rank: number };
   formations: Map<string, number>;
   users: string[];
+  displayTeamColor: string;
 }
 
 // axios 인스턴스 생성 및 최적화
@@ -83,31 +84,34 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
 
 // 병렬로 페이지 데이터 가져오기 (최적화)
 async function fetchPages(startPage: number, endPage: number): Promise<any[]> {
-  const pages = [];
-  const chunks = [];
-  
-  // 청크 단위로 나누기
-  for (let i = startPage; i <= endPage; i += BATCH_SIZE) {
-    const end = Math.min(i + BATCH_SIZE - 1, endPage);
-    chunks.push({ start: i, end });
-  }
-
-  // 청크 단위로 병렬 처리
-  for (const chunk of chunks) {
-    const batch = [];
-    for (let page = chunk.start; page <= chunk.end; page++) {
-      batch.push(fetchPageWithRetry(page));
-      }
-    const results = await Promise.all(batch);
-    pages.push(...results.flat());
-    
-    // 청크 사이 딜레이 (100ms로 단축)
-    if (chunk.end !== endPage) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+  const pageNumbers = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+  const results = [];
+  for (let i = 0; i < pageNumbers.length; i += BATCH_SIZE) {
+    const batch = pageNumbers.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.allSettled(
+      batch.map(page => fetchPageWithRetry(page))
+    );
+    results.push(
+      ...batchResults
+        .filter(r => r.status === 'fulfilled')
+        .map(r => (r as PromiseFulfilledResult<any[]>).value)
+        .flat()
+    );
+    // 실패한 요청은 무시하고, 딜레이 최소화
+    if (i + BATCH_SIZE < pageNumbers.length) {
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
   }
-  
-  return pages;
+  return results;
+}
+
+// 팀컬러 문자열 정규화 함수
+function normalizeTeamColor(color: string): string {
+  return color
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .normalize('NFC');
 }
 
 // 팀컬러별 데이터 처리 (메모리 최적화)
@@ -118,38 +122,46 @@ function processTeamColorData(users: any[], topN: number) {
   for (const user of users) {
     if (!user.teamColor) continue;
 
-    if (!teamColors.has(user.teamColor)) {
-      teamColors.set(user.teamColor, {
+    const normalizedTeamColor = normalizeTeamColor(user.teamColor);
+    const displayTeamColor = user.teamColor.trim(); // 표시용 원본 팀컬러
+
+    if (!teamColors.has(normalizedTeamColor)) {
+      teamColors.set(normalizedTeamColor, {
         count: 0,
         totalValue: 0,
         totalRank: 0,
         totalScore: 0,
-        maxValue: { value: 0, nickname: '', display: '' },
-        minValue: { value: Infinity, nickname: '', display: '' },
+        maxValue: { value: 0, nickname: '', display: '', rank: Infinity },
+        minValue: { value: Infinity, nickname: '', display: '', rank: Infinity },
         formations: new Map<string, number>(),
         users: [],
+        displayTeamColor, // 원본 팀컬러 저장
       });
     }
 
-    const data = teamColors.get(user.teamColor)!;
+    const data = teamColors.get(normalizedTeamColor)!;
     data.count++;
     data.totalValue += user.value;
     data.totalRank += user.rank;
     data.totalScore += user.score;
     data.users.push(user.nickname);
 
-    if (user.value > data.maxValue.value) {
+    // 랭킹이 더 높은(숫자가 더 낮은) 유저를 최고 랭커로 설정
+    if (user.rank < (data.maxValue.rank ?? Infinity)) {
       data.maxValue = {
         value: user.value,
         nickname: user.nickname,
         display: formatValue(user.value),
+        rank: user.rank,
       };
     }
+
     if (user.value < data.minValue.value) {
       data.minValue = {
         value: user.value,
         nickname: user.nickname,
         display: formatValue(user.value),
+        rank: user.rank,
       };
     }
 
@@ -163,8 +175,8 @@ function processTeamColorData(users: any[], topN: number) {
 
   // 결과 정렬 및 포맷팅 (메모리 최적화)
   return Array.from(teamColors.entries())
-    .map(([teamColor, data]) => ({
-      teamColor,
+    .map(([_, data]) => ({
+      teamColor: data.displayTeamColor,
       count: data.count,
       percentage: ((data.count / users.length) * 100).toFixed(1),
       averageValue: formatValue(Math.round(data.totalValue / data.count)),
@@ -174,9 +186,9 @@ function processTeamColorData(users: any[], topN: number) {
       minValue: data.minValue,
       topFormations: Array.from(data.formations.entries())
         .sort((a, b) => (b[1] as number) - (a[1] as number))
-          .slice(0, 3)
-          .map(([form, count]) => ({
-            form,
+        .slice(0, 3)
+        .map(([form, count]) => ({
+          form,
           percent: `${((count / data.count) * 100).toFixed(1)}%`,
         })),
     }))
