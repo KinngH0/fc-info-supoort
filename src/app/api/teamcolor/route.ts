@@ -121,7 +121,9 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       // 구단가치 파싱 로직 개선
       let value = 0;
       try {
-        const priceElement = tr.querySelector('.td.rank_coach .price');
+        // 정확한 셀렉터로 수정
+        const priceElement = tr.querySelector('span.td.rank_coach span.price');
+        console.log('TR innerHTML:', tr.innerHTML);
         console.log('Price element found:', priceElement?.outerHTML);
         
         if (priceElement) {
@@ -133,10 +135,32 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
             value = parseFloat(altValue.replace(/,/g, '')) || 0;
             console.log('Parsed value:', value);
           } else {
-            console.warn('Alt 속성이 없음:', priceElement.outerHTML);
+            // alt가 없으면 textContent 시도
+            const priceText = priceElement.textContent?.trim() || '';
+            console.log('Price text:', priceText);
+            
+            // 숫자만 추출
+            const numericValue = priceText.replace(/[^0-9]/g, '');
+            if (numericValue) {
+              value = parseFloat(numericValue);
+              console.log('Parsed from text:', value);
+            } else {
+              console.warn('구단가치를 찾을 수 없음:', priceElement.outerHTML);
+            }
           }
         } else {
-          console.warn('구단가치 엘리먼트를 찾을 수 없음. TR HTML:', tr.innerHTML);
+          // 다른 셀렉터로 시도
+          const altPriceElement = tr.querySelector('.rank_coach .price');
+          if (altPriceElement) {
+            console.log('Alternative price element found:', altPriceElement.outerHTML);
+            const altValue = altPriceElement.getAttribute('alt');
+            if (altValue) {
+              value = parseFloat(altValue.replace(/,/g, '')) || 0;
+              console.log('Parsed from alternative:', value);
+            }
+          } else {
+            console.warn('구단가치 엘리먼트를 찾을 수 없음');
+          }
         }
       } catch (error) {
         console.error('구단가치 파싱 중 에러 발생:', error);
