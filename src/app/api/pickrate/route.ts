@@ -8,6 +8,44 @@ import { v4 as uuidv4 } from 'uuid';
 const agent = new https.Agent({ rejectUnauthorized: false });
 const jobs: Record<string, any> = {};
 
+// 팀 컬러 리스트
+const TEAM_COLORS = [
+  'ALL',
+  '리버풀',
+  '맨체스터 유나이티드',
+  '맨체스터 시티',
+  '첼시',
+  '아스널',
+  '토트넘',
+  '레알 마드리드',
+  '바르셀로나',
+  '아틀레티코 마드리드',
+  '세비야',
+  '바이에른 뮌헨',
+  '도르트문트',
+  '라이프치히',
+  '레버쿠젠',
+  'PSG',
+  '유벤투스',
+  'AC밀란',
+  '인터밀란',
+  '나폴리',
+  '로마',
+  '아약스',
+  'PSV',
+  '포르투',
+  '벤피카',
+  '갈라타사라이',
+  '페네르바체',
+  '제니트',
+  '리버 플레이트',
+  '보카 주니어스',
+  '플라멩구',
+  '코린티안스',
+  '알 나스르',
+  '알 힐랄'
+];
+
 // 메타데이터 캐시
 let metaDataCache: {
   spidMap: Record<string, string>;
@@ -101,6 +139,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '필수 파라미터가 누락되었습니다.' }, { status: 400 });
     }
 
+    // 팀 컬러 유효성 검사 추가
+    const normalizedTeamColor = teamColor.toLowerCase();
+    if (normalizedTeamColor !== 'all' && 
+        !TEAM_COLORS.some(tc => tc.toLowerCase() === normalizedTeamColor)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 팀 컬러입니다.', validTeamColors: TEAM_COLORS },
+        { status: 400 }
+      );
+    }
+
     jobs[jobId] = { 
       status: 'processing', 
       progress: 0,
@@ -134,7 +182,8 @@ export async function GET(req: NextRequest) {
     const jobId = searchParams.get('jobId');
     
     if (!jobId) {
-      return NextResponse.json({ error: 'jobId가 필요합니다.' }, { status: 400 });
+      // 팀 컬러 목록 반환
+      return NextResponse.json({ teamColors: TEAM_COLORS });
     }
 
     const job = jobs[jobId];

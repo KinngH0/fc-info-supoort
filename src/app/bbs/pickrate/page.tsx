@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 export default function PickratePage() {
   const [rankLimit, setRankLimit] = useState(100);
@@ -11,6 +11,46 @@ export default function PickratePage() {
   const [result, setResult] = useState<any>(null);
   const [sortStates, setSortStates] = useState<Record<string, { key: string; asc: boolean }>>({});
   const [cacheKey, setCacheKey] = useState<string>('');
+  const [teamColorSuggestions, setTeamColorSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // 팀 컬러 목록 가져오기
+  useEffect(() => {
+    const fetchTeamColors = async () => {
+      try {
+        const response = await fetch('/api/pickrate');
+        const data = await response.json();
+        if (data.teamColors) {
+          setTeamColorSuggestions(data.teamColors);
+        }
+      } catch (error) {
+        console.error('팀 컬러 목록을 가져오는 데 실패했습니다:', error);
+      }
+    };
+    fetchTeamColors();
+  }, []);
+
+  // 팀 컬러 입력 핸들러
+  const handleTeamColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setTeamColor(value);
+    setShowSuggestions(true);
+  };
+
+  // 팀 컬러 선택 핸들러
+  const handleTeamColorSelect = (color: string) => {
+    setTeamColor(color);
+    setShowSuggestions(false);
+  };
+
+  // 입력창 클릭 시 초기화 핸들러
+  const handleInputClick = useCallback((e: React.MouseEvent<HTMLInputElement>) => {
+    const input = e.target as HTMLInputElement;
+    input.value = '';
+    if (input.name === 'teamColor') {
+      setShowSuggestions(true);
+    }
+  }, []);
 
   // 캐시된 결과를 가져오는 함수
   const getCachedResult = useCallback(async () => {
@@ -146,40 +186,60 @@ export default function PickratePage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
           </svg>
-          <p className="text-lg font-semibold mb-4">조회 중입니다. 잠시만 기다려주세요...</p>
+          <p className="text-lg font-semibold mb-4">데이터를 조회하고 있습니다. 잠시만 기다려 주세요...</p>
           <div className="w-full max-w-sm h-4 bg-gray-700 rounded overflow-hidden">
             <div className="h-full bg-blue-500 transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
           </div>
-          <p className="mt-2 text-sm text-gray-300">{progress}% 완료</p>
+          <p className="mt-2 text-sm text-gray-300">{progress}% 완료되었습니다</p>
         </div>
       )}
 
       <h1 className="title-main mb-4">🎯 픽률 조회</h1>
-      <p className="text-sub mb-6">상위 랭커들의 팀컬러별 선수 픽률을 조회합니다.</p>
+      <p className="text-sub mb-6">상위 랭커들의 팀 컬러별 선수 픽률을 조회합니다.</p>
 
       <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow mb-10 space-y-4">
         <div>
-          <label className="block mb-1 font-medium">조회 랭커 수 (예: 100)</label>
+          <label className="block mb-1 font-medium">조회할 랭커 수 (예: 100)</label>
           <input
             type="number"
             className="w-full p-2 rounded border dark:bg-gray-700"
             value={rankLimit}
             onChange={(e) => handleInputChange(e, setRankLimit)}
+            placeholder="몇 위까지의 데이터를 조회할지 입력해 주세요"
+            onClick={handleInputClick}
             required
             min="1"
             max="1000"
           />
         </div>
 
-        <div>
-          <label className="block mb-1 font-medium">팀컬러 필터 (예: 리버풀 / all)</label>
+        <div className="relative">
+          <label className="block mb-1 font-medium">팀 컬러 필터 (예: 리버풀 / all)</label>
           <input
             type="text"
             className="w-full p-2 rounded border dark:bg-gray-700"
             value={teamColor}
-            onChange={(e) => handleInputChange(e, setTeamColor)}
+            onChange={handleTeamColorChange}
+            onClick={handleInputClick}
+            placeholder="조회할 팀 컬러를 입력해 주세요"
+            name="teamColor"
             required
           />
+          {showSuggestions && teamColorSuggestions.length > 0 && (
+            <div className="absolute z-10 w-full bg-white dark:bg-gray-800 border rounded-b shadow-lg max-h-60 overflow-y-auto">
+              {teamColorSuggestions
+                .filter(color => color.toLowerCase().includes(teamColor.toLowerCase()))
+                .map((color, index) => (
+                  <div
+                    key={index}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                    onClick={() => handleTeamColorSelect(color)}
+                  >
+                    {color}
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
 
         <div>
@@ -189,6 +249,8 @@ export default function PickratePage() {
             className="w-full p-2 rounded border dark:bg-gray-700"
             value={topN}
             onChange={(e) => handleInputChange(e, setTopN)}
+            placeholder="포지션별로 상위 몇 명까지 표시할지 입력해 주세요"
+            onClick={handleInputClick}
             required
             min="1"
             max="20"
@@ -200,7 +262,7 @@ export default function PickratePage() {
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded"
           disabled={loading}
         >
-          {loading ? '조회 중...' : '조회하기'}
+          {loading ? '조회 중입니다...' : '조회하기'}
         </button>
       </form>
 
@@ -210,11 +272,11 @@ export default function PickratePage() {
             onClick={handleExport}
             className="mb-6 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
           >
-            엑셀로 저장
+            엑셀 파일로 저장
           </button>
 
           <div className="space-y-8">
-            <p className="text-sub text-sm">총 분석 인원: <strong>{result.userCount}</strong>명</p>
+            <p className="text-sub text-sm">총 분석된 인원: <strong>{result.userCount}</strong>명</p>
 
             {Object.entries(result.summary).map(([positionGroup, players]) => (
               <div key={positionGroup} className="mb-8">
