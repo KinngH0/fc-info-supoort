@@ -179,8 +179,8 @@ async function fetchPages(startPage: number, endPage: number): Promise<any[]> {
     }
 
     // 메모리 최적화를 위한 가비지 컬렉션 유도
-    if (i % (BATCH_SIZE * 2) === 0) {
-      global.gc && global.gc();
+    if (i % (BATCH_SIZE * 2) === 0 && typeof global.gc === 'function') {
+      global.gc();
     }
   }
   
@@ -263,8 +263,8 @@ function processTeamColorData(users: any[], topN: number) {
     }
 
     // 청크 처리 후 메모리 정리
-    if (i % (chunkSize * 2) === 0) {
-      global.gc && global.gc();
+    if (i % (chunkSize * 2) === 0 && typeof global.gc === 'function') {
+      global.gc();
     }
   }
 
