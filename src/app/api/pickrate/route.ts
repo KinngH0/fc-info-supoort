@@ -72,29 +72,94 @@ async function loadMetaData() {
 }
 
 export async function POST(req: NextRequest) {
-  const jobId = uuidv4();
-  const { rankLimit, teamColor, topN } = await req.json();
-  jobs[jobId] = { status: 'processing', progress: 0 };
+  try {
+    const jobId = uuidv4();
+    const { rankLimit, teamColor, topN } = await req.json();
+    
+    // 입력값 검증 추가
+    if (!rankLimit || !teamColor || !topN) {
+      return NextResponse.json({ error: '필수 파라미터가 누락되었습니다.' }, { status: 400 });
+    }
 
-  processJob(jobId, rankLimit, teamColor, topN);
+    jobs[jobId] = { 
+      status: 'processing', 
+      progress: 0,
+      startTime: Date.now(),
+      lastUpdate: Date.now()
+    };
 
-  return NextResponse.json({ jobId });
+    // 비동기 작업 시작
+    processJob(jobId, rankLimit, teamColor, topN).catch(error => {
+      console.error(`Job ${jobId} failed:`, error);
+      jobs[jobId] = { 
+        status: 'error', 
+        error: error.message || '처리 중 오류가 발생했습니다.',
+        progress: 0 
+      };
+    });
+
+    return NextResponse.json({ jobId });
+  } catch (error) {
+    console.error('API Error:', error);
+    return NextResponse.json(
+      { error: '요청을 처리하는 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
+  }
 }
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const jobId = searchParams.get('jobId') || '';
-  const job = jobs[jobId];
+  try {
+    const { searchParams } = new URL(req.url);
+    const jobId = searchParams.get('jobId');
+    
+    if (!jobId) {
+      return NextResponse.json({ error: 'jobId가 필요합니다.' }, { status: 400 });
+    }
 
-  if (!job) {
-    return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    const job = jobs[jobId];
+    if (!job) {
+      return NextResponse.json({ error: '작업을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    // 진행 상황 업데이트 로직 개선
+    if (job.status === 'processing') {
+      const now = Date.now();
+      // 30초 이상 업데이트가 없으면 오류로 처리
+      if (now - job.lastUpdate > 30000) {
+        job.status = 'error';
+        job.error = '처리 시간이 초과되었습니다.';
+        job.progress = 0;
+      }
+    }
+
+    if (job.status === 'done') {
+      // 작업 완료 후 정리
+      setTimeout(() => {
+        delete jobs[jobId];
+      }, 300000); // 5분 후 제거
+      return NextResponse.json({ done: true, result: job.result, progress: 100 });
+    }
+
+    if (job.status === 'error') {
+      return NextResponse.json(
+        { error: job.error || '처리 중 오류가 발생했습니다.', progress: 0 },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      status: job.status,
+      progress: job.progress || 0,
+      startTime: job.startTime
+    });
+  } catch (error) {
+    console.error('Status check error:', error);
+    return NextResponse.json(
+      { error: '상태 확인 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
   }
-
-  if (job.status === 'done') {
-    return NextResponse.json({ done: true, result: job.result, progress: 100 });
-  }
-
-  return NextResponse.json({ status: job.status, progress: job.progress || 0 });
 }
 
 async function fetchUserOuid(nickname: string, headers: any) {
@@ -162,6 +227,13 @@ async function fetchUserMatchData(user: { nickname: string; rank: number }, head
 
 async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
   try {
+    const updateProgress = (progress: number) => {
+      if (jobs[jobId]) {
+        jobs[jobId].progress = Math.min(99, progress);
+        jobs[jobId].lastUpdate = Date.now();
+      }
+    };
+
     const cacheKey = `pickrate-${rankLimit}-${teamColor}-${topN}`;
     const cachedResult = getCache(cacheKey);
     
@@ -169,19 +241,25 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       jobs[jobId] = {
         status: 'done',
         result: cachedResult,
-        progress: 100
+        progress: 100,
+        lastUpdate: Date.now()
       };
       return;
     }
 
+    // 초기 진행률 업데이트
+    updateProgress(1);
+
     const normalizedFilter = teamColor.replace(/\s/g, '').toLowerCase();
     const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
     const metaData = await loadMetaData();
+    
+    updateProgress(5);
 
     // 랭킹 데이터 수집 (병렬 처리 개선)
     const pages = Math.ceil(rankLimit / 20);
     const rankedUsers: { nickname: string; rank: number }[] = [];
-    const batchSize = 5; // 한 번에 처리할 페이지 수
+    const batchSize = 5;
     
     for (let i = 0; i < pages; i += batchSize) {
       const currentBatch = Math.min(batchSize, pages - i);
@@ -190,31 +268,38 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       for (let j = 0; j < currentBatch; j++) {
         const page = i + j + 1;
         pagePromises.push(
-          axios.get(`https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`, { httpsAgent: agent })
-            .then(res => {
-              const dom = new JSDOM(res.data);
-              const trs = dom.window.document.querySelectorAll('.tbody .tr');
-              let rank = (page - 1) * 20 + 1;
+          axios.get(`https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`, { 
+            httpsAgent: agent,
+            timeout: 10000 // 10초 타임아웃 설정
+          })
+          .then(res => {
+            const dom = new JSDOM(res.data);
+            const trs = dom.window.document.querySelectorAll('.tbody .tr');
+            let rank = (page - 1) * 20 + 1;
+            
+            Array.from(trs).forEach((tr: any) => {
+              const nameTag = tr.querySelector('.rank_coach .name');
+              const teamTag = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
+              if (!nameTag || !teamTag) return;
               
-              Array.from(trs).forEach((tr: any) => {
-                const nameTag = tr.querySelector('.rank_coach .name');
-                const teamTag = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
-                if (!nameTag || !teamTag) return;
-                
-                const nickname = nameTag.textContent.trim();
-                const team = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
-                if (normalizedFilter === 'all' || team.includes(normalizedFilter)) {
-                  rankedUsers.push({ nickname, rank });
-                }
-                rank++;
-              });
-            })
-            .catch(e => console.warn(`페이지 ${page} 오류`, e))
+              const nickname = nameTag.textContent.trim();
+              const team = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
+              if (normalizedFilter === 'all' || team.includes(normalizedFilter)) {
+                rankedUsers.push({ nickname, rank });
+              }
+              rank++;
+            });
+          })
+          .catch(e => {
+            console.warn(`페이지 ${page} 오류:`, e.message);
+            return null;
+          })
         );
       }
       
       await Promise.all(pagePromises);
-      jobs[jobId].progress = Math.min(20, Math.round((i / pages) * 20));
+      const progress = Math.min(30, 5 + Math.round((i / pages) * 25));
+      updateProgress(progress);
       
       // API 호출 간 딜레이
       if (i + batchSize < pages) {
@@ -334,10 +419,17 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
     jobs[jobId] = {
       status: 'done',
       result,
-      progress: 100
+      progress: 100,
+      lastUpdate: Date.now()
     };
   } catch (error) {
     console.error(`[Job ${jobId}] 처리 실패:`, error);
-    jobs[jobId] = { status: 'error', error: '처리 중 오류 발생', progress: 0 };
+    jobs[jobId] = { 
+      status: 'error', 
+      error: error instanceof Error ? error.message : '처리 중 오류가 발생했습니다.', 
+      progress: 0,
+      lastUpdate: Date.now()
+    };
+    throw error;
   }
 }
