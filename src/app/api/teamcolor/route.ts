@@ -120,16 +120,26 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       
       // 구단가치 파싱 로직 수정
       let value = 0;
-      const priceElement = tr.querySelector('.rank_coach .price');
+      const priceElement = tr.querySelector('span.price');
+      console.log('Price element found:', priceElement); // 디버깅용 로그
+      
       if (priceElement) {
         const raw = priceElement.getAttribute('alt') || priceElement.getAttribute('title') || '0';
+        console.log('Raw value:', raw); // 디버깅용 로그
         try {
           value = parseInt(raw.replace(/,/g, ''));
-        } catch {
+          console.log('Parsed value:', value); // 디버깅용 로그
+        } catch (error) {
           value = 0;
-          console.error('Failed to parse value:', raw);
+          console.error('Failed to parse value:', raw, error);
         }
+      } else {
+        console.error('Price element not found');
       }
+
+      // 포맷팅된 구단가치 표시
+      const formattedValue = formatKoreanCurrency(value);
+      console.log('Formatted value:', formattedValue); // 디버깅용 로그
 
       const formation = tr.querySelector('.td.formation')?.textContent?.trim() || '';
       const rankText = tr.querySelector('.rank_no')?.textContent?.trim() || '0';
@@ -219,9 +229,15 @@ function normalizeTeamColor(color: string): string {
     .normalize('NFC');
 }
 
-// 값 포맷팅 함수
-function formatValue(value: number): string {
-  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+// 한국어 통화 포맷 함수 추가
+function formatKoreanCurrency(value: number): string {
+  const 조 = Math.floor(value / 100_000_000_000_000);
+  const 억 = Math.floor((value % 100_000_000_000_000) / 100_000_000);
+  if (조 > 0) {
+    return `${조}조 ${억.toLocaleString()}억`;
+  } else {
+    return `${억.toLocaleString()}억`;
+  }
 }
 
 // 팀컬러 데이터 처리 최적화
@@ -262,7 +278,7 @@ function processTeamColorData(users: any[], topN: number) {
         data.maxValue = {
           value: user.value,
           nickname: user.nickname,
-          display: formatValue(user.value),
+          display: formatKoreanCurrency(user.value),
           rank: user.rank,
         };
       }
@@ -271,7 +287,7 @@ function processTeamColorData(users: any[], topN: number) {
         data.minValue = {
           value: user.value,
           nickname: user.nickname,
-          display: formatValue(user.value),
+          display: formatKoreanCurrency(user.value),
           rank: user.rank,
         };
       }
@@ -296,7 +312,7 @@ function processTeamColorData(users: any[], topN: number) {
       teamColor: data.displayTeamColor,
       count: data.count,
       percentage: ((data.count / preProcessedUsers.length) * 100).toFixed(1),
-      averageValue: formatValue(Math.round(data.totalValue / data.count)),
+      averageValue: formatKoreanCurrency(Math.round(data.totalValue / data.count)),
       avgRank: Math.round(data.totalRank / data.count),
       avgScore: Math.round(data.totalScore / data.count),
       maxValue: data.maxValue,
