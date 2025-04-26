@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import https from 'https';
 import { v4 as uuidv4 } from 'uuid';
+import { TopRanker, TeamValueStat } from '@/types/pickrate';
 
 const agent = new https.Agent({ rejectUnauthorized: false });
 const jobs: Record<string, any> = {};
@@ -358,24 +359,6 @@ axiosWithRetry.interceptors.response.use(null, async (error) => {
   await new Promise(resolve => setTimeout(resolve, delay));
   return axiosWithRetry(config);
 });
-
-interface TopRanker {
-  nickname: string;
-  rank: number;
-  formation: string;
-  teamValue: number;
-}
-
-interface FormationStat {
-  formation: string;
-  count: number;
-  percentage: string;
-}
-
-interface TeamValueStat {
-  nickname: string;
-  value: number;
-}
 
 export async function POST(req: NextRequest) {
   try {

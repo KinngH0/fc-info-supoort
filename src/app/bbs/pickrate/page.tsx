@@ -1,12 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-
-interface FormationStat {
-  formation: string;
-  count: number;
-  percentage: string;
-}
+import { FormationStat } from '@/types/pickrate';
 
 export default function PickratePage() {
   const [rankLimit, setRankLimit] = useState('');
