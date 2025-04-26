@@ -6,9 +6,15 @@ import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 
 // 캐시 설정 개선
-const CACHE_DURATION = 3 * 60 * 60 * 1000; // 3시간
-const cache = new Map<string, { data: any; timestamp: number; etag?: string }>();
-const pageCache = new Map<string, { data: any[]; timestamp: number; etag?: string }>();
+function getNextHourTimestamp(): number {
+  const now = new Date();
+  const nextHour = new Date(now);
+  nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+  return nextHour.getTime();
+}
+
+const cache = new Map<string, { data: any; expiresAt: number; etag?: string }>();
+const pageCache = new Map<string, { data: any[]; expiresAt: number; etag?: string }>();
 
 // 병렬 처리 최적화
 const BATCH_SIZE = 50;
@@ -60,8 +66,8 @@ function getPageFromCache(page: number): any[] | null {
   const cached = pageCache.get(key);
   const now = Date.now();
   
-  if (cached && now - cached.timestamp < CACHE_DURATION) {
-    console.log(`Cache hit for page ${page}`);
+  if (cached && now < cached.expiresAt) {
+    console.log(`Cache hit for page ${page}, expires at ${new Date(cached.expiresAt).toLocaleTimeString()}`);
     return cached.data;
   }
   
@@ -71,7 +77,11 @@ function getPageFromCache(page: number): any[] | null {
 // 페이지 캐시 저장 개선
 function setPageCache(page: number, data: any[], etag?: string) {
   const key = `page-${page}`;
-  pageCache.set(key, { data, timestamp: Date.now(), etag });
+  pageCache.set(key, { 
+    data, 
+    expiresAt: getNextHourTimestamp(),
+    etag 
+  });
 }
 
 // 재시도 로직이 포함된 페이지 데이터 가져오기 최적화
@@ -299,8 +309,8 @@ export async function POST(req: NextRequest) {
 
     // 캐시 확인
     const cached = cache.get(cacheKey);
-    if (cached && now - cached.timestamp < CACHE_DURATION) {
-      console.log('Cache hit for request');
+    if (cached && now < cached.expiresAt) {
+      console.log(`Cache hit for request, expires at ${new Date(cached.expiresAt).toLocaleTimeString()}`);
       return NextResponse.json(cached.data);
     }
 
@@ -320,7 +330,13 @@ export async function POST(req: NextRequest) {
     const result = processTeamColorData(limitedUsers, topN);
 
     if (result.length > 0) {
-      cache.set(cacheKey, { data: result, timestamp: now });
+      const expiresAt = getNextHourTimestamp();
+      cache.set(cacheKey, { 
+        data: result, 
+        expiresAt,
+        etag: undefined
+      });
+      console.log(`Cache set, expires at ${new Date(expiresAt).toLocaleTimeString()}`);
     }
     
     return NextResponse.json(result);
