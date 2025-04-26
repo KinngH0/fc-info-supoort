@@ -121,29 +121,19 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       // 구단가치 파싱 로직 개선
       let value = 0;
       try {
-        const priceElement = tr.querySelector('.rank_coach span.price');
+        const priceElement = tr.querySelector('.td.rank_coach .price');
         console.log('Price element found:', priceElement?.outerHTML);
         
         if (priceElement) {
-          const priceText = priceElement.textContent?.trim() || '';
-          console.log('Raw price text:', priceText);
+          const altValue = priceElement.getAttribute('alt');
+          console.log('Alt value:', altValue);
           
-          // "3,061조 4,891억" 형식의 텍스트를 숫자로 변환
-          const matches = priceText.match(/(\d+,?\d*)\s*조\s*(?:(\d+,?\d*)\s*억)?/);
-          if (matches) {
-            const trillions = parseFloat(matches[1].replace(/,/g, '')) || 0;
-            const billions = parseFloat(matches[2]?.replace(/,/g, '') || '0') || 0;
-            value = (trillions * 1000000000000) + (billions * 100000000);
-            console.log(`구단가치 파싱 성공 - 조: ${trillions}, 억: ${billions}, 최종값: ${value}`);
+          if (altValue) {
+            // 콤마 제거 후 숫자로 변환
+            value = parseFloat(altValue.replace(/,/g, '')) || 0;
+            console.log('Parsed value:', value);
           } else {
-            // 숫자만 추출 시도
-            const numericValue = priceText.replace(/[^0-9]/g, '');
-            if (numericValue) {
-              value = parseFloat(numericValue);
-              console.log(`숫자만 추출하여 파싱 - 원본: "${priceText}", 추출값: ${value}`);
-            } else {
-              console.warn('구단가치를 숫자로 변환할 수 없음:', priceText);
-            }
+            console.warn('Alt 속성이 없음:', priceElement.outerHTML);
           }
         } else {
           console.warn('구단가치 엘리먼트를 찾을 수 없음. TR HTML:', tr.innerHTML);
