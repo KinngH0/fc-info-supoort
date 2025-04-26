@@ -31,6 +31,7 @@ interface TeamColorData {
   formations: Map<string, number>;
   users: string[];
   displayTeamColor: string;
+  topRank: number;
 }
 
 // HTTP 요청 최적화
@@ -116,8 +117,16 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
     const result = Array.from(rows).map((tr: Element) => {
       const nickname = tr.querySelector('.rank_coach .name')?.textContent?.trim() || '';
       const teamColorElement = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
-      const teamColor = teamColorElement?.textContent?.replace(/\(.*?\)/g, '').trim() || '';
-      
+      let teamColor = '';
+      if (teamColorElement) {
+        const fullText = teamColorElement.textContent || '';
+        teamColor = fullText.replace(/\(.*?\)/g, '').trim();
+        console.log('Original team color:', teamColor); // 디버깅용
+      }
+
+      const normalizedTeamColor = normalizeTeamColor(teamColor);
+      console.log('Normalized team color:', normalizedTeamColor); // 디버깅용
+
       // 구단가치 파싱 로직 수정
       let value = 0;
       const priceElement = tr.querySelector('span.price');
@@ -225,7 +234,6 @@ function normalizeTeamColor(color: string): string {
   return color
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, '')
     .normalize('NFC');
 }
 
@@ -243,75 +251,67 @@ function formatKoreanCurrency(value: number): string {
 // 팀컬러 데이터 처리 최적화
 function processTeamColorData(users: any[], topN: number) {
   const teamColors = new Map<string, TeamColorData>();
-  const chunkSize = 2000; // 청크 사이즈 증가
-  const preProcessedUsers = users.filter(user => user.teamColor); // 사전 필터링
 
-  for (let i = 0; i < preProcessedUsers.length; i += chunkSize) {
-    const chunk = preProcessedUsers.slice(i, i + chunkSize);
-    
-    for (const user of chunk) {
-      const normalizedTeamColor = normalizeTeamColor(user.teamColor);
-      const displayTeamColor = user.teamColor.trim();
+  for (const user of users) {
+    const normalizedTeamColor = normalizeTeamColor(user.teamColor);
+    const displayTeamColor = user.teamColor.trim();
 
-      if (!teamColors.has(normalizedTeamColor)) {
-        teamColors.set(normalizedTeamColor, {
-          count: 0,
-          totalValue: 0,
-          totalRank: 0,
-          totalScore: 0,
-          maxValue: { value: 0, nickname: '', display: '', rank: Infinity },
-          minValue: { value: Infinity, nickname: '', display: '', rank: Infinity },
-          formations: new Map<string, number>(),
-          users: [],
-          displayTeamColor,
-        });
-      }
-
-      const data = teamColors.get(normalizedTeamColor)!;
-      data.count++;
-      data.totalValue += user.value;
-      data.totalRank += user.rank;
-      data.totalScore += user.score;
-      data.users.push(user.nickname);
-
-      if (user.rank < data.maxValue.rank) {
-        data.maxValue = {
-          value: user.value,
-          nickname: user.nickname,
-          display: formatKoreanCurrency(user.value),
-          rank: user.rank,
-        };
-      }
-
-      if (user.value < data.minValue.value) {
-        data.minValue = {
-          value: user.value,
-          nickname: user.nickname,
-          display: formatKoreanCurrency(user.value),
-          rank: user.rank,
-        };
-      }
-
-      if (user.formation) {
-        data.formations.set(
-          user.formation,
-          (data.formations.get(user.formation) || 0) + 1
-        );
-      }
+    if (!teamColors.has(normalizedTeamColor)) {
+      teamColors.set(normalizedTeamColor, {
+        count: 0,
+        totalValue: 0,
+        totalRank: 0,
+        totalScore: 0,
+        maxValue: { value: 0, nickname: '', display: '', rank: Infinity },
+        minValue: { value: Infinity, nickname: '', display: '', rank: Infinity },
+        formations: new Map<string, number>(),
+        users: [],
+        displayTeamColor,
+        topRank: Infinity,
+      });
     }
 
-    // 청크 처리 후 메모리 정리
-    if (i % (chunkSize * 2) === 0 && typeof global.gc === 'function') {
-      global.gc();
+    const data = teamColors.get(normalizedTeamColor)!;
+    data.count++;
+    data.totalValue += user.value;
+    data.totalRank += user.rank;
+    data.totalScore += user.score;
+    data.users.push(user.nickname);
+    
+    data.topRank = Math.min(data.topRank, user.rank);
+
+    if (user.value > data.maxValue.value) {
+      data.maxValue = {
+        value: user.value,
+        nickname: user.nickname,
+        display: formatKoreanCurrency(user.value),
+        rank: user.rank,
+      };
+    }
+
+    if (user.value < data.minValue.value) {
+      data.minValue = {
+        value: user.value,
+        nickname: user.nickname,
+        display: formatKoreanCurrency(user.value),
+        rank: user.rank,
+      };
+    }
+
+    if (user.formation) {
+      data.formations.set(
+        user.formation,
+        (data.formations.get(user.formation) || 0) + 1
+      );
     }
   }
 
-  // 결과 정렬 및 포맷팅 최적화
   return Array.from(teamColors.entries())
     .map(([, data]) => ({
       teamColor: data.displayTeamColor,
       count: data.count,
-      percentage: ((data.count / preProcessedUsers.length) * 100).toFixed(1),
+      topRank: data.topRank,
+      percentage: ((data.count / users.length) * 100).toFixed(1),
       averageValue: formatKoreanCurrency(Math.round(data.totalValue / data.count)),
       avgRank: Math.round(data.totalRank / data.count),
       avgScore: Math.round(data.totalScore / data.count),
@@ -325,7 +325,7 @@ function processTeamColorData(users: any[], topN: number) {
           percent: `${((count / data.count) * 100).toFixed(1)}%`,
         })),
     }))
-    .sort((a, b) => b.count - a.count)
+    .sort((a, b) => a.topRank - b.topRank)
     .slice(0, topN);
 }
 
@@ -354,8 +354,14 @@ export async function POST(req: NextRequest) {
     
     console.log(`Fetched ${allUsers.length} users`);
     
-    const limitedUsers = allUsers.slice(0, rankLimit);
-    const result = processTeamColorData(limitedUsers, topN);
+    const sortedUsers = allUsers
+      .map((user, index) => ({
+        ...user,
+        originalRank: index + 1
+      }))
+      .slice(0, rankLimit);
+
+    const result = processTeamColorData(sortedUsers, topN);
 
     if (result.length > 0) {
       const expiresAt = getNextHourTimestamp();
