@@ -122,9 +122,12 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       let value = 0;
       const priceElement = tr.querySelector('.rank_coach .price');
       if (priceElement) {
-        const altValue = priceElement.getAttribute('alt');
-        if (altValue) {
-          value = parseFloat(altValue.replace(/,/g, '')) || 0;
+        const raw = priceElement.getAttribute('alt') || priceElement.getAttribute('title') || '0';
+        try {
+          value = parseInt(raw.replace(/,/g, ''));
+        } catch {
+          value = 0;
+          console.error('Failed to parse value:', raw);
         }
       }
 
