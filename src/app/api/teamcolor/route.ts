@@ -119,16 +119,16 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       const teamColor = teamColorElement?.textContent?.replace(/\(.*?\)/g, '').trim() || '';
       
       // 구단가치 파싱 로직 개선
-      const valueElement = tr.querySelector('span.price');
+      const valueElement = tr.querySelector('.rank_coach .price');
       let value = 0;
       if (valueElement) {
-        const valueText = valueElement.getAttribute('alt') || '0';
+        const valueText = valueElement.getAttribute('alt') || valueElement.getAttribute('title') || '0';
         // 콤마 제거 후 숫자만 추출
         const numericValue = valueText.replace(/,/g, '');
         value = parseFloat(numericValue) || 0;
         
         // 디버그 로깅
-        console.log(`구단가치 파싱 - 원본: "${valueText}", 추출값: "${numericValue}", 최종값: ${value}`);
+        console.log(`구단가치 파싱 - 원본: "${valueText}", HTML: "${valueElement.outerHTML}", 추출값: "${numericValue}", 최종값: ${value}`);
       } else {
         console.warn('구단가치 엘리먼트를 찾을 수 없음:', tr.innerHTML);
       }
