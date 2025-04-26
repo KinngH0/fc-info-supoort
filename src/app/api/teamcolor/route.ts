@@ -117,8 +117,17 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       const nickname = tr.querySelector('.rank_coach .name')?.textContent?.trim() || '';
       const teamColorElement = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
       const teamColor = teamColorElement?.textContent?.replace(/\(.*?\)/g, '').trim() || '';
-      const valueElement = tr.querySelector('.td.value');
-      const valueRaw = valueElement?.textContent?.trim().replace(/[^0-9]/g, '') || '0';
+      
+      // 구단가치 파싱 로직 개선
+      const valueElement = tr.querySelector('.value');
+      let value = 0;
+      if (valueElement) {
+        const valueText = valueElement.textContent?.trim() || '0';
+        // 숫자만 추출 (억 단위 제거)
+        const numericValue = valueText.replace(/[^0-9.]/g, '');
+        value = parseFloat(numericValue) || 0;
+      }
+
       const formation = tr.querySelector('.td.formation')?.textContent?.trim() || '';
       const rankText = tr.querySelector('.rank_no')?.textContent?.trim() || '0';
       const scoreText = tr.querySelector('.td.rank_r_win_point')?.textContent?.trim() || '0';
@@ -130,7 +139,7 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       return {
         nickname,
         teamColor,
-        value: parseInt(valueRaw, 10) || 0,
+        value,
         rank: parseInt(rankText, 10) || 0,
         score: parseInt(scoreText, 10) || 0,
         formation,
