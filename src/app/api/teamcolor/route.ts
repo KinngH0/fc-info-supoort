@@ -122,13 +122,20 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       const valueElement = tr.querySelector('.rank_coach .price');
       let value = 0;
       if (valueElement) {
-        const valueText = valueElement.getAttribute('alt') || valueElement.getAttribute('title') || '0';
-        // 콤마 제거 후 숫자만 추출
-        const numericValue = valueText.replace(/,/g, '');
-        value = parseFloat(numericValue) || 0;
+        const valueText = valueElement.textContent?.trim() || '0';
+        console.log('구단가치 원본 텍스트:', valueText); // 디버그용
         
-        // 디버그 로깅
-        console.log(`구단가치 파싱 - 원본: "${valueText}", HTML: "${valueElement.outerHTML}", 추출값: "${numericValue}", 최종값: ${value}`);
+        // "3,061조 4,891억" 형식의 텍스트를 숫자로 변환
+        const matches = valueText.match(/(\d+,?\d*)\s*조\s*(?:(\d+,?\d*)\s*억)?/);
+        if (matches) {
+          const trillions = parseFloat(matches[1].replace(/,/g, '')) || 0;
+          const billions = parseFloat(matches[2]?.replace(/,/g, '') || '0') || 0;
+          value = (trillions * 1000000000000) + (billions * 100000000);
+          
+          console.log(`구단가치 파싱 - 조: ${trillions}, 억: ${billions}, 최종값: ${value}`);
+        } else {
+          console.warn('구단가치 형식이 예상과 다름:', valueText);
+        }
       } else {
         console.warn('구단가치 엘리먼트를 찾을 수 없음:', tr.innerHTML);
       }
