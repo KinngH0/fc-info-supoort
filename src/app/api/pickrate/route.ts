@@ -377,15 +377,6 @@ interface TeamValueStat {
   value: number;
 }
 
-interface JobResult {
-  status: string;
-  progress: number;
-  message?: string;
-  error?: string;
-  result?: any;
-  lastUpdate: number;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const jobId = uuidv4();
@@ -589,7 +580,7 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
     const rankedUsers: { nickname: string; rank: number; formation?: string; teamValue?: number }[] = [];
     const batchSize = 20;
     let topRanker: TopRanker | null = null;
-    let formations: Record<string, number> = {};
+    const formations: Record<string, number> = {};
     let maxTeamValue: TeamValueStat = { nickname: '', value: 0 };
     let minTeamValue: TeamValueStat = { nickname: '', value: Infinity };
     let totalTeamValue = 0;
