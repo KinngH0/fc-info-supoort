@@ -119,25 +119,37 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       const teamColor = teamColorElement?.textContent?.replace(/\(.*?\)/g, '').trim() || '';
       
       // 구단가치 파싱 로직 개선
-      const valueElement = tr.querySelector('.rank_coach .price');
       let value = 0;
-      if (valueElement) {
-        const valueText = valueElement.textContent?.trim() || '0';
-        console.log('구단가치 원본 텍스트:', valueText); // 디버그용
+      try {
+        const priceElement = tr.querySelector('.rank_coach span.price');
+        console.log('Price element found:', priceElement?.outerHTML);
         
-        // "3,061조 4,891억" 형식의 텍스트를 숫자로 변환
-        const matches = valueText.match(/(\d+,?\d*)\s*조\s*(?:(\d+,?\d*)\s*억)?/);
-        if (matches) {
-          const trillions = parseFloat(matches[1].replace(/,/g, '')) || 0;
-          const billions = parseFloat(matches[2]?.replace(/,/g, '') || '0') || 0;
-          value = (trillions * 1000000000000) + (billions * 100000000);
+        if (priceElement) {
+          const priceText = priceElement.textContent?.trim() || '';
+          console.log('Raw price text:', priceText);
           
-          console.log(`구단가치 파싱 - 조: ${trillions}, 억: ${billions}, 최종값: ${value}`);
+          // "3,061조 4,891억" 형식의 텍스트를 숫자로 변환
+          const matches = priceText.match(/(\d+,?\d*)\s*조\s*(?:(\d+,?\d*)\s*억)?/);
+          if (matches) {
+            const trillions = parseFloat(matches[1].replace(/,/g, '')) || 0;
+            const billions = parseFloat(matches[2]?.replace(/,/g, '') || '0') || 0;
+            value = (trillions * 1000000000000) + (billions * 100000000);
+            console.log(`구단가치 파싱 성공 - 조: ${trillions}, 억: ${billions}, 최종값: ${value}`);
+          } else {
+            // 숫자만 추출 시도
+            const numericValue = priceText.replace(/[^0-9]/g, '');
+            if (numericValue) {
+              value = parseFloat(numericValue);
+              console.log(`숫자만 추출하여 파싱 - 원본: "${priceText}", 추출값: ${value}`);
+            } else {
+              console.warn('구단가치를 숫자로 변환할 수 없음:', priceText);
+            }
+          }
         } else {
-          console.warn('구단가치 형식이 예상과 다름:', valueText);
+          console.warn('구단가치 엘리먼트를 찾을 수 없음. TR HTML:', tr.innerHTML);
         }
-      } else {
-        console.warn('구단가치 엘리먼트를 찾을 수 없음:', tr.innerHTML);
+      } catch (error) {
+        console.error('구단가치 파싱 중 에러 발생:', error);
       }
 
       const formation = tr.querySelector('.td.formation')?.textContent?.trim() || '';
