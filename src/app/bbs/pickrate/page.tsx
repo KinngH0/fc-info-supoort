@@ -2,6 +2,12 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
+interface FormationStat {
+  formation: string;
+  count: number;
+  percentage: string;
+}
+
 export default function PickratePage() {
   const [rankLimit, setRankLimit] = useState('');
   const [teamColor, setTeamColor] = useState('');
@@ -289,6 +295,39 @@ export default function PickratePage() {
           </button>
 
           <div className="space-y-8">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+              <h2 className="text-lg font-bold mb-4">팀 정보 요약</h2>
+              
+              {/* 최고 랭커 정보 */}
+              <div className="mb-6">
+                <h3 className="font-semibold mb-2">최고 랭커</h3>
+                <p>닉네임: <span className="font-medium">{result.topRanker.nickname}</span> ({result.topRanker.rank}위)</p>
+                <p>포메이션: {result.topRanker.formation}</p>
+                <p>구단가치: {result.topRanker.teamValue.toLocaleString()}억</p>
+              </div>
+
+              {/* 포메이션 통계 */}
+              <div className="mb-6">
+                <h3 className="font-semibold mb-2">포메이션 통계</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {result.formations.slice(0, 6).map((f: FormationStat, idx: number) => (
+                    <div key={idx} className="flex justify-between">
+                      <span>{f.formation}</span>
+                      <span>{f.percentage}% ({f.count}명)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 구단가치 통계 */}
+              <div>
+                <h3 className="font-semibold mb-2">구단가치 통계</h3>
+                <p>평균: {result.teamValue.average.toLocaleString()}억</p>
+                <p>최고: {result.teamValue.max.value.toLocaleString()}억 ({result.teamValue.max.nickname})</p>
+                <p>최저: {result.teamValue.min.value.toLocaleString()}억 ({result.teamValue.min.nickname})</p>
+              </div>
+            </div>
+
             <p className="text-sub text-sm">총 분석된 인원: <strong>{result.userCount}</strong>명</p>
 
             {Object.entries(result.summary).map(([positionGroup, players]) => (

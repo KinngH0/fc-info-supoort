@@ -10,7 +10,6 @@ const jobs: Record<string, any> = {};
 
 // 팀 컬러 리스트
 const TEAM_COLORS = [
-  'ALL',
   '1. FC 우니온 베를린',
   '1. FC 쾰른',
   '1. FSV 마인츠 05',
@@ -360,6 +359,33 @@ axiosWithRetry.interceptors.response.use(null, async (error) => {
   return axiosWithRetry(config);
 });
 
+interface TopRanker {
+  nickname: string;
+  rank: number;
+  formation: string;
+  teamValue: number;
+}
+
+interface FormationStat {
+  formation: string;
+  count: number;
+  percentage: string;
+}
+
+interface TeamValueStat {
+  nickname: string;
+  value: number;
+}
+
+interface JobResult {
+  status: string;
+  progress: number;
+  message?: string;
+  error?: string;
+  result?: any;
+  lastUpdate: number;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const jobId = uuidv4();
@@ -375,7 +401,7 @@ export async function POST(req: NextRequest) {
     if (normalizedTeamColor !== 'all' && 
         !TEAM_COLORS.some(tc => tc.toLowerCase() === normalizedTeamColor)) {
       return NextResponse.json(
-        { error: '유효하지 않은 팀 컬러입니다.', validTeamColors: TEAM_COLORS },
+        { error: '유효하지 않은 팀 컬러입니다. "all"을 입력하거나 유효한 팀 컬러를 선택해 주세요.', validTeamColors: TEAM_COLORS },
         { status: 400 }
       );
     }
@@ -527,9 +553,10 @@ async function fetchUserMatchData(user: { nickname: string; rank: number }, head
 
 async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
   try {
-    const updateProgress = (progress: number) => {
+    const updateProgress = (progress: number, message: string) => {
       if (jobs[jobId]) {
         jobs[jobId].progress = Math.min(99, progress);
+        jobs[jobId].message = message;
         jobs[jobId].lastUpdate = Date.now();
       }
     };
@@ -548,19 +575,25 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
     }
 
     // 초기 진행률 설정
-    updateProgress(0);
+    updateProgress(0, '데이터 수집 준비 중...');
 
     const normalizedFilter = teamColor.replace(/\s/g, '').toLowerCase();
     const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
     
     // 메타데이터 로드 (5%)
     const metaData = await loadMetaData();
-    updateProgress(5);
+    updateProgress(5, '메타데이터 로드 완료');
 
     // 랭킹 데이터 수집 최적화 (5-35%)
     const pages = Math.ceil(rankLimit / 20);
-    const rankedUsers: { nickname: string; rank: number }[] = [];
-    const batchSize = 20; // 병렬 처리 배치 크기 증가
+    const rankedUsers: { nickname: string; rank: number; formation?: string; teamValue?: number }[] = [];
+    const batchSize = 20;
+    let topRanker: TopRanker | null = null;
+    let formations: Record<string, number> = {};
+    let maxTeamValue: TeamValueStat = { nickname: '', value: 0 };
+    let minTeamValue: TeamValueStat = { nickname: '', value: Infinity };
+    let totalTeamValue = 0;
+    let teamValueCount = 0;
     
     for (let i = 0; i < pages; i += batchSize) {
       const currentBatch = Math.min(batchSize, pages - i);
@@ -577,12 +610,41 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
           Array.from(trs).forEach((tr: any) => {
             const nameTag = tr.querySelector('.rank_coach .name');
             const teamTag = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
+            const formationTag = tr.querySelector('.td.formation');
+            const teamValueTag = tr.querySelector('.td.value');
+            
             if (!nameTag || !teamTag) return;
             
             const nickname = nameTag.textContent.trim();
             const team = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
+            const formation = formationTag ? formationTag.textContent.trim() : '';
+            const teamValue = teamValueTag ? parseInt(teamValueTag.textContent.replace(/[^0-9]/g, '')) : 0;
+
             if (normalizedFilter === 'all' || team.includes(normalizedFilter)) {
-              rankedUsers.push({ nickname, rank });
+              // 포메이션 통계 수집
+              if (formation) {
+                formations[formation] = (formations[formation] || 0) + 1;
+              }
+
+              // 구단가치 통계 수집
+              if (teamValue > 0) {
+                totalTeamValue += teamValue;
+                teamValueCount++;
+                
+                if (teamValue > maxTeamValue.value) {
+                  maxTeamValue = { nickname, value: teamValue };
+                }
+                if (teamValue < minTeamValue.value) {
+                  minTeamValue = { nickname, value: teamValue };
+                }
+              }
+
+              // 최고 랭커 정보 저장
+              if (!topRanker || rank < topRanker.rank) {
+                topRanker = { nickname, rank, formation, teamValue };
+              }
+
+              rankedUsers.push({ nickname, rank, formation, teamValue });
             }
             rank++;
           });
@@ -595,15 +657,27 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       
       await Promise.all(pagePromises);
       const rankProgress = 5 + Math.round((i / pages) * 30);
-      updateProgress(rankProgress);
+      updateProgress(rankProgress, '랭킹 데이터 수집 중...');
       
-      // 배치 간 딜레이 감소
       if (i + batchSize < pages) {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
     }
 
+    // 포메이션 통계 정렬
+    const sortedFormations = Object.entries(formations)
+      .map(([formation, count]) => ({
+        formation,
+        count,
+        percentage: ((count / rankedUsers.length) * 100).toFixed(1)
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // 구단가치 평균 계산
+    const averageTeamValue = teamValueCount > 0 ? Math.round(totalTeamValue / teamValueCount) : 0;
+
     // 매치 데이터 수집 최적화 (35-85%)
+    updateProgress(35, '매치 데이터 수집 중...');
     const userBatchSize = 50; // 병렬 처리 배치 크기 증가
     const userMatchResults: any[] = [];
     const processedUsers = new Set<string>();
@@ -653,7 +727,7 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       });
 
       const matchProgress = 35 + Math.round((i / rankedUsers.length) * 50);
-      updateProgress(matchProgress);
+      updateProgress(matchProgress, '매치 데이터 수집 중...');
       
       // 배치 간 딜레이 감소
       if (i + userBatchSize < rankedUsers.length) {
@@ -662,7 +736,7 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
     }
 
     // 데이터 처리 및 정리 (85-99%)
-    updateProgress(85);
+    updateProgress(85, '데이터 처리 중...');
 
     // 포지션별 데이터 처리 최적화
     const positionGroups: Record<string, string[]> = {
@@ -715,12 +789,19 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
     const result = {
       userCount: userSet.size,
       topN,
-      summary
+      summary,
+      topRanker,
+      formations: sortedFormations,
+      teamValue: {
+        average: averageTeamValue,
+        max: maxTeamValue,
+        min: minTeamValue
+      }
     };
 
     // 결과 캐싱 및 완료
     setCache(cacheKey, result);
-    updateProgress(99); // 최종 진행률
+    updateProgress(99, '데이터 처리 완료');
 
     jobs[jobId] = {
       status: 'done',
@@ -728,14 +809,13 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       progress: 100,
       lastUpdate: Date.now()
     };
-  } catch (error) {
-    console.error(`[Job ${jobId}] 처리 실패:`, error);
-    jobs[jobId] = { 
-      status: 'error', 
-      error: error instanceof Error ? error.message : '처리 중 오류가 발생했습니다.', 
+  } catch (error: unknown) {
+    console.error('Job processing error:', error);
+    jobs[jobId] = {
+      status: 'error',
+      error: error instanceof Error ? error.message : '처리 중 오류가 발생했습니다.',
       progress: 0,
       lastUpdate: Date.now()
     };
-    throw error;
   }
 }
