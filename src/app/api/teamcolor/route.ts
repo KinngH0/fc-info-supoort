@@ -5,17 +5,15 @@ import axios from 'axios';
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 
-// 캐시 설정
-const CACHE_DURATION = 60 * 60 * 1000; // 1시간
-const cache = new Map<string, { data: any; timestamp: number }>();
-const pageCache = new Map<string, { data: any[]; timestamp: number }>();
+// 캐시 설정 개선
+const CACHE_DURATION = 3 * 60 * 60 * 1000; // 3시간
+const cache = new Map<string, { data: any; timestamp: number; etag?: string }>();
+const pageCache = new Map<string, { data: any[]; timestamp: number; etag?: string }>();
 
-// 병렬 처리를 위한 배치 크기 증가
-const BATCH_SIZE = 40;
-
-// 재시도 설정
+// 병렬 처리 최적화
+const BATCH_SIZE = 50;
+const RETRY_DELAY = 500;
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
 
 interface TeamColorData {
   count: number;
@@ -29,43 +27,55 @@ interface TeamColorData {
   displayTeamColor: string;
 }
 
-// axios 인스턴스 생성 및 최적화
+// HTTP 요청 최적화
 const axiosInstance = axios.create({
+  timeout: 20000,
+  httpAgent: new HttpAgent({ 
+    keepAlive: true,
+    maxSockets: 100,
+    maxFreeSockets: 10,
+    timeout: 60000
+  }),
+  httpsAgent: new HttpsAgent({ 
+    keepAlive: true, 
+    rejectUnauthorized: false,
+    maxSockets: 100,
+    maxFreeSockets: 10,
+    timeout: 60000
+  }),
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Accept-Encoding': 'gzip, deflate',
     'Connection': 'keep-alive',
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache',
-  },
-  timeout: 30000,
-  httpAgent: new HttpAgent({ keepAlive: true }),
-  httpsAgent: new HttpsAgent({ keepAlive: true, rejectUnauthorized: false })
+  }
 });
 
-// 페이지 캐시 확인
+// 페이지 캐시 확인 개선
 function getPageFromCache(page: number): any[] | null {
   const key = `page-${page}`;
   const cached = pageCache.get(key);
   const now = Date.now();
   
   if (cached && now - cached.timestamp < CACHE_DURATION) {
+    console.log(`Cache hit for page ${page}`);
     return cached.data;
   }
   
   return null;
 }
 
-// 페이지 캐시 저장
-function setPageCache(page: number, data: any[]) {
+// 페이지 캐시 저장 개선
+function setPageCache(page: number, data: any[], etag?: string) {
   const key = `page-${page}`;
-  pageCache.set(key, { data, timestamp: Date.now() });
+  pageCache.set(key, { data, timestamp: Date.now(), etag });
 }
 
-// 재시도 로직이 포함된 페이지 데이터 가져오기
+// 재시도 로직이 포함된 페이지 데이터 가져오기 최적화
 async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
-  // 캐시 확인
   const cachedData = getPageFromCache(page);
   if (cachedData) {
     return cachedData;
@@ -76,6 +86,7 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
     console.log(`Fetching page ${page}: ${url}`);
     
     const res = await axiosInstance.get(url);
+    const etag = res.headers['etag'];
     
     if (!res.data || typeof res.data !== 'string') {
       console.error(`Invalid response data for page ${page}:`, res.data);
@@ -85,7 +96,6 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
     const dom = new JSDOM(res.data);
     const document = dom.window.document;
     
-    // 필요한 셀렉터만 사용하여 DOM 파싱 최적화
     const rows = document.querySelectorAll('.tbody .tr');
     
     if (!rows || rows.length === 0) {
@@ -117,9 +127,8 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       };
     });
 
-    // 결과 캐시 저장
     if (result.length > 0) {
-      setPageCache(page, result);
+      setPageCache(page, result, etag);
     }
     
     return result;
@@ -137,12 +146,12 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
   }
 }
 
-// 병렬로 페이지 데이터 가져오기 (최적화)
+// 병렬로 페이지 데이터 가져오기 최적화
 async function fetchPages(startPage: number, endPage: number): Promise<any[]> {
   const pageNumbers = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
-  const results = [];
+  const results = new Array(pageNumbers.length * 20); // 예상 크기로 배열 초기화
+  let resultIndex = 0;
   
-  // 배치 단위로 처리
   for (let i = 0; i < pageNumbers.length; i += BATCH_SIZE) {
     const batch = pageNumbers.slice(i, i + BATCH_SIZE);
     console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}, pages ${batch[0]}-${batch[batch.length - 1]}`);
@@ -151,7 +160,6 @@ async function fetchPages(startPage: number, endPage: number): Promise<any[]> {
       batch.map(page => fetchPageWithRetry(page))
     );
     
-    // 성공한 결과만 필터링하여 추가
     const validResults = batchResults
       .filter((r): r is PromiseFulfilledResult<any[]> => r.status === 'fulfilled')
       .map(r => r.value)
@@ -161,15 +169,23 @@ async function fetchPages(startPage: number, endPage: number): Promise<any[]> {
       console.warn(`No valid results in batch ${Math.floor(i / BATCH_SIZE) + 1}`);
     }
     
-    results.push(...validResults);
+    // 결과 배열에 직접 할당
+    for (const result of validResults) {
+      results[resultIndex++] = result;
+    }
 
-    // 딜레이 최적화
     if (i + BATCH_SIZE < pageNumbers.length) {
       await new Promise(resolve => setTimeout(resolve, 30));
     }
+
+    // 메모리 최적화를 위한 가비지 컬렉션 유도
+    if (i % (BATCH_SIZE * 2) === 0) {
+      global.gc && global.gc();
+    }
   }
   
-  return results;
+  // 실제 데이터가 있는 부분만 반환
+  return results.slice(0, resultIndex).filter(Boolean);
 }
 
 // 팀컬러 문자열 정규화 함수
@@ -186,18 +202,16 @@ function formatValue(value: number): string {
   return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-// 팀컬러 데이터 처리 (메모리 최적화)
+// 팀컬러 데이터 처리 최적화
 function processTeamColorData(users: any[], topN: number) {
   const teamColors = new Map<string, TeamColorData>();
+  const chunkSize = 2000; // 청크 사이즈 증가
+  const preProcessedUsers = users.filter(user => user.teamColor); // 사전 필터링
 
-  // chunk 단위로 데이터 처리
-  const chunkSize = 1000;
-  for (let i = 0; i < users.length; i += chunkSize) {
-    const chunk = users.slice(i, i + chunkSize);
+  for (let i = 0; i < preProcessedUsers.length; i += chunkSize) {
+    const chunk = preProcessedUsers.slice(i, i + chunkSize);
     
     for (const user of chunk) {
-      if (!user.teamColor) continue;
-
       const normalizedTeamColor = normalizeTeamColor(user.teamColor);
       const displayTeamColor = user.teamColor.trim();
 
@@ -247,14 +261,19 @@ function processTeamColorData(users: any[], topN: number) {
         );
       }
     }
+
+    // 청크 처리 후 메모리 정리
+    if (i % (chunkSize * 2) === 0) {
+      global.gc && global.gc();
+    }
   }
 
-  // 결과 정렬 및 포맷팅
+  // 결과 정렬 및 포맷팅 최적화
   return Array.from(teamColors.entries())
     .map(([, data]) => ({
       teamColor: data.displayTeamColor,
       count: data.count,
-      percentage: ((data.count / users.length) * 100).toFixed(1),
+      percentage: ((data.count / preProcessedUsers.length) * 100).toFixed(1),
       averageValue: formatValue(Math.round(data.totalValue / data.count)),
       avgRank: Math.round(data.totalRank / data.count),
       avgScore: Math.round(data.totalScore / data.count),
@@ -275,12 +294,13 @@ function processTeamColorData(users: any[], topN: number) {
 export async function POST(req: NextRequest) {
   try {
     const { rankLimit, topN } = await req.json();
-
     const cacheKey = `teamcolor-${rankLimit}-${topN}`;
     const now = Date.now();
 
+    // 캐시 확인
     const cached = cache.get(cacheKey);
     if (cached && now - cached.timestamp < CACHE_DURATION) {
+      console.log('Cache hit for request');
       return NextResponse.json(cached.data);
     }
 
