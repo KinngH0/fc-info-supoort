@@ -175,7 +175,7 @@ function processTeamColorData(users: any[], topN: number) {
 
   // 결과 정렬 및 포맷팅 (메모리 최적화)
   return Array.from(teamColors.entries())
-    .map(([_, data]) => ({
+    .map(([, data]) => ({
       teamColor: data.displayTeamColor,
       count: data.count,
       percentage: ((data.count / users.length) * 100).toFixed(1),
