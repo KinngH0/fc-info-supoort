@@ -47,30 +47,30 @@ async function fetchPageWithRetry(page: number, retries = 0): Promise<any[]> {
       `https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`
     );
 
-    const dom = new JSDOM(res.data);
+      const dom = new JSDOM(res.data);
     const document = dom.window.document;
     const rows = Array.from(document.querySelectorAll('.tbody .tr'));
 
     return rows.map((tr) => {
-      const nickname = tr.querySelector('.rank_coach .name')?.textContent?.trim() || '';
+        const nickname = tr.querySelector('.rank_coach .name')?.textContent?.trim() || '';
       const teamColor = tr
         .querySelector('.td.team_color .name .inner')
         ?.textContent?.replace(/\(.*?\)/g, '')
         .trim() || '';
-      const valueRaw = tr.querySelector('.rank_coach .price')?.getAttribute('title') || '0';
-      const formation = tr.querySelector('.td.formation')?.textContent?.trim() || '';
-      const rankText = tr.querySelector('.rank_no')?.textContent?.trim() || '0';
-      const scoreText = tr.querySelector('.td.rank_r_win_point')?.textContent?.trim() || '0';
+        const valueRaw = tr.querySelector('.rank_coach .price')?.getAttribute('title') || '0';
+        const formation = tr.querySelector('.td.formation')?.textContent?.trim() || '';
+        const rankText = tr.querySelector('.rank_no')?.textContent?.trim() || '0';
+        const scoreText = tr.querySelector('.td.rank_r_win_point')?.textContent?.trim() || '0';
 
       return {
-        nickname,
-        teamColor,
+          nickname,
+          teamColor,
         value: parseInt(valueRaw.replace(/,/g, ''), 10) || 0,
         rank: parseInt(rankText, 10) || 0,
         score: parseInt(scoreText, 10) || 0,
-        formation,
+          formation,
       };
-    });
+      });
   } catch (error) {
     if (retries < MAX_RETRIES) {
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
@@ -97,7 +97,7 @@ async function fetchPages(startPage: number, endPage: number): Promise<any[]> {
     const batch = [];
     for (let page = chunk.start; page <= chunk.end; page++) {
       batch.push(fetchPageWithRetry(page));
-    }
+      }
     const results = await Promise.all(batch);
     pages.push(...results.flat());
     
@@ -174,9 +174,9 @@ function processTeamColorData(users: any[], topN: number) {
       minValue: data.minValue,
       topFormations: Array.from(data.formations.entries())
         .sort((a, b) => (b[1] as number) - (a[1] as number))
-        .slice(0, 3)
-        .map(([form, count]) => ({
-          form,
+          .slice(0, 3)
+          .map(([form, count]) => ({
+            form,
           percent: `${((count / data.count) * 100).toFixed(1)}%`,
         })),
     }))

@@ -45,7 +45,7 @@ async function getUserId(axiosInstance: AxiosInstance, nickname: string): Promis
 async function getMatchList(axiosInstance: AxiosInstance, ouid: string): Promise<string[]> {
   try {
     const res = await axiosInstance.get(
-      `/user/match?matchtype=52&ouid=${ouid}&offset=0&limit=100&orderby=desc`
+      `/user/match?matchtype=52&ouid=${ouid}&offset=0&limit=20&orderby=desc`
     );
     return res.data;
   } catch (error) {
@@ -80,10 +80,27 @@ async function processMatches(axiosInstance: AxiosInstance, ouid: string): Promi
     return { played, win, draw, loss, matches };
   }
 
-  // 각 매치의 상세 정보 조회
-  for (const matchId of matchIds) {
-    try {
-      const matchData = await getMatchDetail(axiosInstance, matchId);
+  // 배치 크기 설정
+  const batchSize = 5;
+  
+  // matchIds를 배치 크기만큼 나누어 처리
+  for (let i = 0; i < matchIds.length; i += batchSize) {
+    const batch = matchIds.slice(i, i + batchSize);
+    
+    // 배치 단위로 병렬 처리
+    const batchResults = await Promise.all(
+      batch.map(async (matchId) => {
+        try {
+          return await getMatchDetail(axiosInstance, matchId);
+        } catch (error) {
+          console.error('Error processing match:', matchId, error);
+          return null;
+        }
+      })
+    );
+
+    // 배치 결과 처리
+    for (const matchData of batchResults) {
       if (!matchData) continue;
 
       for (const info of matchData.matchInfo) {
@@ -97,7 +114,6 @@ async function processMatches(axiosInstance: AxiosInstance, ouid: string): Promi
           else if (matchResult === '무') draw++;
           else if (matchResult === '패') loss++;
 
-          // 매치 정보 저장
           matches.push({
             date: new Date(matchTimeStr).toLocaleString('ko-KR', {
               timeZone: 'Asia/Seoul',
@@ -111,12 +127,11 @@ async function processMatches(axiosInstance: AxiosInstance, ouid: string): Promi
           });
         }
       }
+    }
 
-      // API 호출 간격 조절
-      await new Promise(resolve => setTimeout(resolve, 100));
-    } catch (error) {
-      console.error('Error processing match:', matchId, error);
-      continue;
+    // 배치 간 딜레이
+    if (i + batchSize < matchIds.length) {
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
   }
 

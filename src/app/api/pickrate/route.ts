@@ -21,6 +21,36 @@ const ouidCache: Record<string, { ouid: string; timestamp: number }> = {};
 // 매치 데이터 캐시
 const matchCache: Record<string, { data: any; timestamp: number }> = {};
 
+// 메모리 캐시 개선
+const cache: Record<string, { data: any; timestamp: number }> = {};
+
+// 캐시 유효성 검사 함수
+function isValidCache(key: string): boolean {
+  const cached = cache[key];
+  if (!cached) return false;
+  
+  const now = Date.now();
+  // 1시간(3600000ms) 이내의 캐시만 유효
+  return (now - cached.timestamp) < 3600000;
+}
+
+// 캐시 저장 함수
+function setCache(key: string, data: any): void {
+  cache[key] = {
+    data,
+    timestamp: Date.now()
+  };
+}
+
+// 캐시 조회 함수
+function getCache(key: string): any | null {
+  if (!isValidCache(key)) {
+    delete cache[key]; // 만료된 캐시 삭제
+    return null;
+  }
+  return cache[key].data;
+}
+
 // 메타데이터 로드 함수
 async function loadMetaData() {
   if (metaDataCache) return metaDataCache;
@@ -132,48 +162,73 @@ async function fetchUserMatchData(user: { nickname: string; rank: number }, head
 
 async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
   try {
+    const cacheKey = `pickrate-${rankLimit}-${teamColor}-${topN}`;
+    const cachedResult = getCache(cacheKey);
+    
+    if (cachedResult) {
+      jobs[jobId] = {
+        status: 'done',
+        result: cachedResult,
+        progress: 100
+      };
+      return;
+    }
+
     const normalizedFilter = teamColor.replace(/\s/g, '').toLowerCase();
     const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
     const metaData = await loadMetaData();
 
-    // 랭킹 데이터 수집 (병렬 처리)
+    // 랭킹 데이터 수집 (병렬 처리 개선)
     const pages = Math.ceil(rankLimit / 20);
     const rankedUsers: { nickname: string; rank: number }[] = [];
-    const pagePromises = [];
-
-    for (let page = 1; page <= pages; page++) {
-      const promise = axios.get(`https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`, { httpsAgent: agent })
-        .then(res => {
-          const dom = new JSDOM(res.data);
-          const trs = dom.window.document.querySelectorAll('.tbody .tr');
-          let rank = (page - 1) * 20 + 1;
-          trs.forEach((tr: any) => {
-            const nameTag = tr.querySelector('.rank_coach .name');
-            const teamTag = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
-            if (!nameTag || !teamTag) return;
-            const nickname = nameTag.textContent.trim();
-            const team = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
-            if (normalizedFilter === 'all' || team.includes(normalizedFilter)) {
-              rankedUsers.push({ nickname, rank });
-            }
-            rank++;
-          });
-        })
-        .catch(e => console.warn(`페이지 ${page} 오류`, e));
+    const batchSize = 5; // 한 번에 처리할 페이지 수
+    
+    for (let i = 0; i < pages; i += batchSize) {
+      const currentBatch = Math.min(batchSize, pages - i);
+      const pagePromises = [];
       
-      pagePromises.push(promise);
+      for (let j = 0; j < currentBatch; j++) {
+        const page = i + j + 1;
+        pagePromises.push(
+          axios.get(`https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`, { httpsAgent: agent })
+            .then(res => {
+              const dom = new JSDOM(res.data);
+              const trs = dom.window.document.querySelectorAll('.tbody .tr');
+              let rank = (page - 1) * 20 + 1;
+              
+              Array.from(trs).forEach((tr: any) => {
+                const nameTag = tr.querySelector('.rank_coach .name');
+                const teamTag = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
+                if (!nameTag || !teamTag) return;
+                
+                const nickname = nameTag.textContent.trim();
+                const team = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
+                if (normalizedFilter === 'all' || team.includes(normalizedFilter)) {
+                  rankedUsers.push({ nickname, rank });
+                }
+                rank++;
+              });
+            })
+            .catch(e => console.warn(`페이지 ${page} 오류`, e))
+        );
+      }
+      
+      await Promise.all(pagePromises);
+      jobs[jobId].progress = Math.min(20, Math.round((i / pages) * 20));
+      
+      // API 호출 간 딜레이
+      if (i + batchSize < pages) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
     }
 
-    await Promise.all(pagePromises);
-    jobs[jobId].progress = 20;
-
     // 매치 데이터 수집 (병렬 처리 개선)
-    const batchSize = 10; // 동시 처리 수 증가
+    const userBatchSize = 20; // 한 번에 처리할 유저 수
     const userMatchResults: any[] = [];
     const processedUsers = new Set<string>();
 
-    for (let i = 0; i < rankedUsers.length; i += batchSize) {
-      const batch = rankedUsers.slice(i, i + batchSize);
+    for (let i = 0; i < rankedUsers.length; i += userBatchSize) {
+      const batch = rankedUsers.slice(i, Math.min(i + userBatchSize, rankedUsers.length));
       const batchPromises = batch
         .filter(user => !processedUsers.has(user.nickname))
         .map(user => {
@@ -211,7 +266,12 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
         }
       });
 
-      jobs[jobId].progress = 20 + Math.round(((i + batch.length) / rankedUsers.length) * 80);
+      jobs[jobId].progress = 20 + Math.round(((i + batch.length) / rankedUsers.length) * 60);
+      
+      // API 호출 간 딜레이
+      if (i + userBatchSize < rankedUsers.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
 
     // 포지션별 데이터 처리 최적화
@@ -262,13 +322,18 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       })
     );
 
+    const result = {
+      userCount: userSet.size,
+      topN,
+      summary
+    };
+
+    // 결과 캐싱
+    setCache(cacheKey, result);
+
     jobs[jobId] = {
       status: 'done',
-      result: {
-        userCount: userSet.size,
-        topN,
-        summary
-      },
+      result,
       progress: 100
     };
   } catch (error) {
