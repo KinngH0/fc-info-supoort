@@ -97,7 +97,11 @@ export default function PickratePage() {
       const jobRes = await fetch('/api/pickrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rankLimit, teamColor, topN })
+        body: JSON.stringify({ 
+          rankLimit: parseInt(rankLimit), 
+          teamColor, 
+          topN: parseInt(topN) 
+        })
       });
 
       const { jobId } = await jobRes.json();
@@ -111,7 +115,8 @@ export default function PickratePage() {
             setProgress(data.progress);
             setProgressMessage(data.message || '데이터 수집 중');
           }
-          if (data.done) {
+
+          if (data.status === 'done') {
             clearInterval(interval);
             setResult(data.result);
             setLoading(false);
@@ -123,13 +128,17 @@ export default function PickratePage() {
               timestamp: Date.now()
             }));
             setCacheKey(key);
+          } else if (data.status === 'error') {
+            clearInterval(interval);
+            setLoading(false);
+            alert(data.error || '데이터 수집 중 오류가 발생했습니다.');
           }
         } catch (error) {
           console.error('Error fetching progress:', error);
           clearInterval(interval);
           setLoading(false);
         }
-      }, 2000); // 3초에서 2초로 간격 줄임
+      }, 2000);
     } catch (error) {
       console.error('Error submitting job:', error);
       setLoading(false);
