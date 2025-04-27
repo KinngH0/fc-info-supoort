@@ -4,7 +4,6 @@ import { JSDOM } from 'jsdom';
 import axios from 'axios';
 import https from 'https';
 import { v4 as uuidv4 } from 'uuid';
-import { TopRanker, TeamValueStat } from '@/types/pickrate';
 
 const agent = new https.Agent({ rejectUnauthorized: false });
 const jobs: Record<string, any> = {};
@@ -277,89 +276,6 @@ const TEAM_COLORS = [
   '호주'
 ];
 
-// 메타데이터 캐시
-let metaDataCache: {
-  spidMap: Record<string, string>;
-  seasonMap: Record<string, string>;
-  positionMap: Record<string, string>;
-} | null = null;
-
-// 유저 OUID 캐시
-const ouidCache: Record<string, { ouid: string; timestamp: number }> = {};
-
-// 매치 데이터 캐시
-const matchCache: Record<string, { data: any; timestamp: number }> = {};
-
-// 메모리 캐시 개선
-const cache: Record<string, { data: any; timestamp: number }> = {};
-
-// 캐시 유효성 검사 함수
-function isValidCache(key: string): boolean {
-  const cached = cache[key];
-  if (!cached) return false;
-  
-  const now = Date.now();
-  // 1시간(3600000ms) 이내의 캐시만 유효
-  return (now - cached.timestamp) < 3600000;
-}
-
-// 캐시 저장 함수
-function setCache(key: string, data: any): void {
-  cache[key] = {
-    data,
-    timestamp: Date.now()
-  };
-}
-
-// 캐시 조회 함수
-function getCache(key: string): any | null {
-  if (!isValidCache(key)) {
-    delete cache[key]; // 만료된 캐시 삭제
-    return null;
-  }
-  return cache[key].data;
-}
-
-// 메타데이터 로드 함수
-async function loadMetaData() {
-  if (metaDataCache) return metaDataCache;
-
-  const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
-  const [spidData, seasonData, positionData] = await Promise.all([
-    axios.get('https://open.api.nexon.com/static/fconline/meta/spid.json', { headers, httpsAgent: agent }),
-    axios.get('https://open.api.nexon.com/static/fconline/meta/seasonid.json', { headers, httpsAgent: agent }),
-    axios.get('https://open.api.nexon.com/static/fconline/meta/spposition.json', { headers, httpsAgent: agent })
-  ]);
-
-  metaDataCache = {
-    spidMap: Object.fromEntries(spidData.data.map((item: any) => [item.id, item.name])),
-    seasonMap: Object.fromEntries(seasonData.data.map((item: any) => [item.seasonId, item.className.split('(')[0].trim()])),
-    positionMap: Object.fromEntries(positionData.data.map((item: any) => [item.spposition, item.desc]))
-  };
-
-  return metaDataCache;
-}
-
-// axios 재시도 로직
-const axiosWithRetry = axios.create({
-  timeout: 15000,
-  httpsAgent: agent
-});
-
-axiosWithRetry.interceptors.response.use(null, async (error) => {
-  const config = error.config;
-  config.retryCount = config.retryCount || 0;
-  
-  if (config.retryCount >= 3) {
-    return Promise.reject(error);
-  }
-  
-  config.retryCount += 1;
-  const delay = config.retryCount * 1000; // 재시도마다 1초씩 증가
-  await new Promise(resolve => setTimeout(resolve, delay));
-  return axiosWithRetry(config);
-});
-
 export async function POST(req: NextRequest) {
   try {
     const jobId = uuidv4();
@@ -420,69 +336,6 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(job);
-}
-
-async function fetchUserOuid(nickname: string, headers: any) {
-  const cachedData = ouidCache[nickname];
-  const now = Date.now();
-  
-  if (cachedData && (now - cachedData.timestamp) < 24 * 60 * 60 * 1000) {
-    return cachedData.ouid;
-  }
-
-  try {
-    const ouidRes = await axios.get('https://open.api.nexon.com/fconline/v1/id', {
-      params: { nickname },
-      headers,
-      httpsAgent: agent
-    });
-    const ouid = ouidRes.data.ouid;
-    if (ouid) {
-      ouidCache[nickname] = { ouid, timestamp: now };
-    }
-    return ouid;
-  } catch (e) {
-    console.warn(`OUID 조회 실패: ${nickname}`, e);
-    return null;
-  }
-}
-
-async function fetchUserMatchData(user: { nickname: string; rank: number }, headers: any) {
-  try {
-    const ouid = await fetchUserOuid(user.nickname, headers);
-    if (!ouid) return null;
-
-    // 캐시된 매치 데이터 확인
-    const cacheKey = `${user.nickname}-${ouid}`;
-    const cachedMatch = matchCache[cacheKey];
-    const now = Date.now();
-
-    // 1시간 이내의 캐시된 데이터가 있으면 재사용
-    if (cachedMatch && (now - cachedMatch.timestamp) < 60 * 60 * 1000) {
-      return cachedMatch.data;
-    }
-
-    const matchListRes = await axios.get('https://open.api.nexon.com/fconline/v1/user/match', {
-      params: { matchtype: 52, ouid, offset: 0, limit: 1 },
-      headers,
-      httpsAgent: agent
-    });
-    const matchId = matchListRes.data[0];
-    if (!matchId) return null;
-
-    const matchDetailRes = await axios.get('https://open.api.nexon.com/fconline/v1/match-detail', {
-      params: { matchid: matchId },
-      headers,
-      httpsAgent: agent
-    });
-
-    const result = { matchDetail: matchDetailRes.data, ouid };
-    matchCache[cacheKey] = { data: result, timestamp: now };
-    return result;
-  } catch (e) {
-    console.warn(`매치 데이터 조회 실패: ${user.nickname}`, e);
-    return null;
-  }
 }
 
 async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
