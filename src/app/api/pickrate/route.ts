@@ -365,17 +365,17 @@ export async function POST(req: NextRequest) {
     const jobId = uuidv4();
     const { rankLimit, teamColor, topN } = await req.json();
     
-    // 입력값 검증 추가
+    // 입력값 검증
     if (!rankLimit || !teamColor || !topN) {
       return NextResponse.json({ error: '필수 파라미터가 누락되었습니다.' }, { status: 400 });
     }
 
-    // 팀 컬러 유효성 검사 추가
+    // 팀 컬러 유효성 검사
     const normalizedTeamColor = teamColor.toLowerCase();
     if (normalizedTeamColor !== 'all' && 
         !TEAM_COLORS.some(tc => tc.toLowerCase() === normalizedTeamColor)) {
       return NextResponse.json(
-        { error: '유효하지 않은 팀 컬러입니다. "all"을 입력하거나 유효한 팀 컬러를 선택해 주세요.', validTeamColors: TEAM_COLORS },
+        { error: '유효하지 않은 팀 컬러입니다.', validTeamColors: TEAM_COLORS },
         { status: 400 }
       );
     }
@@ -408,58 +408,18 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const jobId = searchParams.get('jobId');
-    
-    if (!jobId) {
-      // 팀 컬러 목록 반환
-      return NextResponse.json({ teamColors: TEAM_COLORS });
-    }
-
-    const job = jobs[jobId];
-    if (!job) {
-      return NextResponse.json({ error: '작업을 찾을 수 없습니다.' }, { status: 404 });
-    }
-
-    // 진행 상황 업데이트 로직 개선
-    if (job.status === 'processing') {
-      const now = Date.now();
-      // 30초 이상 업데이트가 없으면 오류로 처리
-      if (now - job.lastUpdate > 30000) {
-        job.status = 'error';
-        job.error = '처리 시간이 초과되었습니다.';
-        job.progress = 0;
-      }
-    }
-
-    if (job.status === 'done') {
-      // 작업 완료 후 정리
-      setTimeout(() => {
-        delete jobs[jobId];
-      }, 300000); // 5분 후 제거
-      return NextResponse.json({ done: true, result: job.result, progress: 100 });
-    }
-
-    if (job.status === 'error') {
-      return NextResponse.json(
-        { error: job.error || '처리 중 오류가 발생했습니다.', progress: 0 },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      status: job.status,
-      progress: job.progress || 0,
-      startTime: job.startTime
-    });
-  } catch (error) {
-    console.error('Status check error:', error);
-    return NextResponse.json(
-      { error: '상태 확인 중 오류가 발생했습니다.' },
-      { status: 500 }
-    );
+  const jobId = req.nextUrl.searchParams.get('jobId');
+  
+  if (!jobId) {
+    return NextResponse.json({ teamColors: TEAM_COLORS });
   }
+
+  const job = jobs[jobId];
+  if (!job) {
+    return NextResponse.json({ error: '작업을 찾을 수 없습니다.' }, { status: 404 });
+  }
+
+  return NextResponse.json(job);
 }
 
 async function fetchUserOuid(nickname: string, headers: any) {
@@ -535,254 +495,186 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       }
     };
 
-    const cacheKey = `pickrate-${rankLimit}-${teamColor}-${topN}`;
-    const cachedResult = getCache(cacheKey);
+    updateProgress(0, '데이터 수집 준비 중...');
+
+    // 1. 랭킹 데이터 수집
+    const pages = Math.ceil(rankLimit / 20);
+    const rankedUsers: any[] = [];
     
-    if (cachedResult) {
+    for (let page = 1; page <= pages; page++) {
+      updateProgress(
+        Math.round((page / pages) * 30),
+        `랭킹 데이터 수집 중 (${page}/${pages})`
+      );
+
+      try {
+        const res = await axios.get(
+          `https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`,
+          { httpsAgent: agent }
+        );
+
+        const dom = new JSDOM(res.data);
+        const document = dom.window.document;
+        const rows = document.querySelectorAll('.tbody .tr');
+
+        for (const row of rows) {
+          const nickname = row.querySelector('.rank_coach .name')?.textContent?.trim() || '';
+          const teamColorElement = row.querySelector('.td.team_color .name .inner') || row.querySelector('.td.team_color .name');
+          const teamColorText = teamColorElement?.textContent?.replace(/\(.*?\)/g, '').trim() || '';
+          const formation = row.querySelector('.td.formation')?.textContent?.trim() || '';
+          const rankText = row.querySelector('.rank_no')?.textContent?.trim() || '0';
+          const rank = parseInt(rankText, 10);
+
+          // rankLimit이 1인 경우 첫 번째 유저만 확인
+          if (rankLimit === 1) {
+            if (rank === 1) {
+              if (teamColorText.toLowerCase() === teamColor.toLowerCase()) {
+                rankedUsers.push({ nickname, teamColor: teamColorText, formation, rank });
+              }
+              break;
+            }
+          } else {
+            // rankLimit이 1이 아닌 경우 모든 유저를 수집하고 나중에 필터링
+            rankedUsers.push({ nickname, teamColor: teamColorText, formation, rank });
+          }
+        }
+
+        // rankLimit이 1이고 첫 번째 유저를 찾았다면 더 이상 수집하지 않음
+        if (rankLimit === 1 && rankedUsers.length > 0) break;
+        
+        // rankLimit에 도달했다면 수집 중단
+        if (rankedUsers.length >= rankLimit) break;
+
+      } catch (error) {
+        console.error(`Error fetching page ${page}:`, error);
+        continue;
+      }
+
+      // 요청 간 간격 두기
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // 2. 팀컬러 필터링
+    const filteredUsers = rankedUsers.filter(user => 
+      user.teamColor.toLowerCase() === teamColor.toLowerCase()
+    );
+
+    // 3. 결과가 없는 경우 처리
+    if (filteredUsers.length === 0) {
       jobs[jobId] = {
         status: 'done',
-        result: cachedResult,
+        result: {
+          message: rankLimit === 1 ? 
+            '1위 유저가 해당 팀컬러를 사용하지 않습니다.' : 
+            '해당 팀컬러를 사용하는 유저가 없습니다.',
+          users: [],
+          summary: {}
+        },
         progress: 100,
         lastUpdate: Date.now()
       };
       return;
     }
 
-    // 초기 진행률 설정
-    updateProgress(0, '데이터 수집 준비 중...');
-
-    const normalizedFilter = teamColor.replace(/\s/g, '').toLowerCase();
-    const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
+    // 4. 유저별 매치 데이터 수집
+    updateProgress(40, '매치 데이터 수집 중...');
+    const matchData: any[] = [];
     
-    // 메타데이터 로드 (5%)
-    const metaData = await loadMetaData();
-    updateProgress(5, '메타데이터 로드 완료');
+    for (let i = 0; i < filteredUsers.length; i++) {
+      const user = filteredUsers[i];
+      updateProgress(
+        40 + Math.round((i / filteredUsers.length) * 40),
+        `매치 데이터 수집 중 (${i + 1}/${filteredUsers.length})`
+      );
 
-    // 랭킹 데이터 수집 최적화 (5-35%)
-    const pages = Math.ceil(rankLimit / 20);
-    const rankedUsers: { nickname: string; rank: number; formation?: string; teamValue?: number }[] = [];
-    const batchSize = 20;
-    let topRanker: TopRanker | null = null;
-    const formations: Record<string, number> = {};
-    let maxTeamValue: TeamValueStat = { nickname: '', value: 0 };
-    let minTeamValue: TeamValueStat = { nickname: '', value: Infinity };
-    let totalTeamValue = 0;
-    let teamValueCount = 0;
-    
-    for (let i = 0; i < pages; i += batchSize) {
-      const currentBatch = Math.min(batchSize, pages - i);
-      const currentPage = Math.floor(i / batchSize) + 1;
-      const totalBatches = Math.ceil(pages / batchSize);
-      updateProgress(5 + Math.round((i / pages) * 30), `랭킹 데이터 수집 중 (${currentPage}/${totalBatches} 페이지)`);
+      try {
+        const matchRes = await axios.get(
+          `https://fconline.nexon.com/datacenter/rank_match?nickname=${encodeURIComponent(user.nickname)}`,
+          { httpsAgent: agent }
+        );
 
-      const pagePromises = Array.from({ length: currentBatch }, (_, j) => {
-        const page = i + j + 1;
-        return axiosWithRetry.get(`https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`, {
-          httpsAgent: agent,
-        })
-        .then(res => {
-          const dom = new JSDOM(res.data);
-          const trs = dom.window.document.querySelectorAll('.tbody .tr');
-          let rank = (page - 1) * 20 + 1;
-          
-          Array.from(trs).forEach((tr: any) => {
-            const nameTag = tr.querySelector('.rank_coach .name');
-            const teamTag = tr.querySelector('.td.team_color .name .inner') || tr.querySelector('.td.team_color .name');
-            const formationTag = tr.querySelector('.td.formation');
-            const teamValueTag = tr.querySelector('.td.value');
-            
-            if (!nameTag || !teamTag) return;
-            
-            const nickname = nameTag.textContent.trim();
-            const team = teamTag.textContent.replace(/\(.*?\)/g, '').replace(/\s/g, '').toLowerCase();
-            const formation = formationTag ? formationTag.textContent.trim() : '';
-            const teamValueText = teamValueTag ? teamValueTag.textContent.trim() : '';
-            const teamValue = teamValueText ? parseInt(teamValueText.replace(/[^0-9]/g, '')) : 0;
-
-            if (normalizedFilter === 'all' || team.includes(normalizedFilter)) {
-              // 포메이션 통계 수집
-              if (formation) {
-                formations[formation] = (formations[formation] || 0) + 1;
-              }
-
-              // 구단가치 통계 수집
-              if (teamValue > 0) {
-                totalTeamValue += teamValue;
-                teamValueCount++;
-                
-                if (teamValue > maxTeamValue.value) {
-                  maxTeamValue = { nickname, value: teamValue };
-                }
-                if (teamValue < minTeamValue.value) {
-                  minTeamValue = { nickname, value: teamValue };
-                }
-              }
-
-              // 최고 랭커 정보 저장
-              if (!topRanker || rank < topRanker.rank) {
-                topRanker = { nickname, rank, formation, teamValue };
-              }
-
-              rankedUsers.push({ nickname, rank, formation, teamValue });
-            }
-            rank++;
-          });
-        })
-        .catch(e => {
-          console.warn(`페이지 ${page} 오류:`, e.message);
-          return null;
-        });
-      });
-      
-      await Promise.all(pagePromises);
-      const rankProgress = 5 + Math.round((i / pages) * 30);
-      updateProgress(rankProgress, '랭킹 데이터 수집 중...');
-      
-      if (i + batchSize < pages) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-    }
-
-    // 포메이션 통계 정렬
-    const sortedFormations = Object.entries(formations)
-      .map(([formation, count]) => ({
-        formation,
-        count,
-        percentage: ((count / rankedUsers.length) * 100).toFixed(1)
-      }))
-      .sort((a, b) => b.count - a.count);
-
-    // 구단가치 평균 계산
-    const averageTeamValue = teamValueCount > 0 ? Math.round(totalTeamValue / teamValueCount) : 0;
-
-    // 매치 데이터 수집 최적화 (35-85%)
-    updateProgress(35, '매치 데이터 수집 준비 중...');
-    const userBatchSize = 50;
-    const userMatchResults: any[] = [];
-    const processedUsers = new Set<string>();
-
-    for (let i = 0; i < rankedUsers.length; i += userBatchSize) {
-      const batch = rankedUsers.slice(i, Math.min(i + userBatchSize, rankedUsers.length));
-      const currentBatch = Math.floor(i / userBatchSize) + 1;
-      const totalBatches = Math.ceil(rankedUsers.length / userBatchSize);
-      updateProgress(35 + Math.round((i / rankedUsers.length) * 50), 
-        `매치 데이터 수집 중 (${currentBatch}/${totalBatches} 배치, ${i + 1}/${rankedUsers.length}명)`);
-
-      const batchPromises = batch
-        .filter(user => !processedUsers.has(user.nickname))
-        .map(user => {
-          processedUsers.add(user.nickname);
-          return fetchUserMatchData(user, headers)
-            .catch(e => {
-              console.warn(`매치 데이터 조회 실패: ${user.nickname}`, e);
-              return null;
-            });
-        });
-      
-      const batchResults = await Promise.all(batchPromises);
-      
-      batchResults.forEach((result, index) => {
-        if (!result) return;
+        const matchDom = new JSDOM(matchRes.data);
+        const matchDoc = matchDom.window.document;
         
-        const { matchDetail, ouid } = result;
-        const user = batch[index];
-
-        for (const info of matchDetail.matchInfo) {
-          if (info.ouid !== ouid) continue;
-          for (const player of info.player || []) {
-            if (player.spPosition === 28) continue; // 감독 포지션 제외
-            
-            const spId = player.spId;
-            const grade = player.spGrade;
-            const position = metaData.positionMap[player.spPosition] || `pos${player.spPosition}`;
-            const seasonId = parseInt(String(spId).slice(0, 3));
-            const name = metaData.spidMap[spId] || `(Unknown:${spId})`;
-            const season = metaData.seasonMap[seasonId] || `${seasonId}`;
-
-            userMatchResults.push({
-              nickname: user.nickname,
-              position,
-              name,
-              season,
-              grade
-            });
-          }
+        // 여기에 매치 데이터 파싱 로직 추가
+        const players = matchDoc.querySelectorAll('.player_data');
+        for (const player of players) {
+          const position = player.querySelector('.position')?.textContent?.trim() || '';
+          const name = player.querySelector('.name')?.textContent?.trim() || '';
+          const season = player.querySelector('.season')?.textContent?.trim() || '';
+          
+          matchData.push({
+            nickname: user.nickname,
+            rank: user.rank,
+            position,
+            name,
+            season
+          });
         }
-      });
-      
-      // 배치 간 딜레이 감소
-      if (i + userBatchSize < rankedUsers.length) {
-        await new Promise(resolve => setTimeout(resolve, 20));
+      } catch (error) {
+        console.error(`Error fetching match data for ${user.nickname}:`, error);
+        continue;
       }
+
+      // 요청 간 간격 두기
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    // 데이터 처리 및 정리 (85-99%)
-    updateProgress(85, '데이터 처리 중...');
-
-    // 포지션별 데이터 처리 최적화
-    const positionGroups: Record<string, string[]> = {
-      'CAM': ['CAM'],
-      'RAM, LAM': ['RAM', 'LAM'],
-      'RM, LM': ['RM', 'LM'],
-      'CM': ['CM', 'LCM', 'RCM'],
-      'CDM': ['CDM', 'LDM', 'RDM'],
-      'LB': ['LB', 'LWB'],
-      'CB': ['CB', 'LCB', 'RCB', 'SW'],
-      'RB': ['RB', 'RWB'],
+    // 5. 포지션별 데이터 정리
+    updateProgress(80, '데이터 정리 중...');
+    
+    const positionGroups = {
+      'FW': ['ST', 'CF', 'LW', 'RW', 'LF', 'RF'],
+      'MF': ['CAM', 'CM', 'CDM', 'LM', 'RM', 'LAM', 'RAM', 'LCM', 'RCM', 'LDM', 'RDM'],
+      'DF': ['CB', 'LB', 'RB', 'LWB', 'RWB', 'LCB', 'RCB'],
       'GK': ['GK']
     };
 
     const summary: Record<string, any[]> = {};
-    const userSet = new Set(userMatchResults.map((p) => p.nickname));
+    
+    for (const [groupName, positions] of Object.entries(positionGroups)) {
+      const positionData = matchData.filter(data => 
+        positions.includes(data.position)
+      );
 
-    // 포지션별 데이터 처리를 병렬로 수행
-    await Promise.all(
-      Object.entries(positionGroups).map(async ([group, positions]) => {
-        const filtered = userMatchResults.filter((p) => positions.includes(p.position));
-        const grouped = new Map();
-
-        for (const p of filtered) {
-          const key = `${p.name}||${p.season}||${p.grade}`;
-          if (!grouped.has(key)) {
-            grouped.set(key, {
-              name: p.name,
-              season: p.season,
-              grade: p.grade,
-              count: 0,
-              users: new Set()
-            });
-          }
-          const entry = grouped.get(key);
-          entry.count++;
-          entry.users.add(p.nickname);
+      const playerStats = new Map<string, { count: number; users: Set<string> }>();
+      
+      for (const data of positionData) {
+        const key = `${data.name}-${data.season}`;
+        if (!playerStats.has(key)) {
+          playerStats.set(key, { count: 0, users: new Set() });
         }
+        const stats = playerStats.get(key)!;
+        stats.count++;
+        stats.users.add(data.nickname);
+      }
 
-        summary[group] = Array.from(grouped.values())
-          .map(v => ({
-            ...v,
-            users: Array.from(v.users)
-          }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, topN);
-      })
-    );
+      summary[groupName] = Array.from(playerStats.entries())
+        .map(([key, stats]) => {
+          const [name, season] = key.split('-');
+          return {
+            name,
+            season,
+            count: stats.count,
+            userCount: stats.users.size,
+            percentage: ((stats.users.size / filteredUsers.length) * 100).toFixed(1)
+          };
+        })
+        .sort((a, b) => b.count - a.count)
+        .slice(0, topN);
+    }
 
+    // 6. 최종 결과 저장
     const result = {
-      userCount: userSet.size,
+      totalUsers: filteredUsers.length,
       topN,
       summary,
-      topRanker,
-      formations: sortedFormations,
-      teamValue: {
-        average: averageTeamValue,
-        max: maxTeamValue,
-        min: minTeamValue
-      }
+      users: filteredUsers.map(u => ({
+        nickname: u.nickname,
+        rank: u.rank,
+        formation: u.formation
+      }))
     };
-
-    // 결과 캐싱 및 완료
-    setCache(cacheKey, result);
-    updateProgress(99, '데이터 처리 완료');
 
     jobs[jobId] = {
       status: 'done',
@@ -790,7 +682,8 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       progress: 100,
       lastUpdate: Date.now()
     };
-  } catch (error: unknown) {
+
+  } catch (error) {
     console.error('Job processing error:', error);
     jobs[jobId] = {
       status: 'error',
