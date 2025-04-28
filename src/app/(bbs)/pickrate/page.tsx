@@ -14,27 +14,6 @@ export default function PickratePage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PickrateResponse | null>(null);
 
-  if (status === 'loading') {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === 'unauthenticated') {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
-          <p>로그인이 필요합니다. 로그인 후 이용해주세요.</p>
-        </div>
-      </div>
-    );
-  }
-
   const onSubmit = useCallback(async (data: { rankLimit: number; teamColor: string; topN: number }) => {
     if (!session?.user?.apiKey) {
       setError('API 키가 필요합니다. 설정에서 API 키를 입력해주세요.');
@@ -92,6 +71,27 @@ export default function PickratePage() {
       setError(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.');
     }
   }, [session, isLoading]);
+
+  if (status === 'loading') {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+          <p>로그인이 필요합니다. 로그인 후 이용해주세요.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
