@@ -6,12 +6,41 @@ export interface TopRanker {
 }
 
 export interface FormationStat {
-  formation: string;
   count: number;
-  percentage: string;
+  percentage: number;
+}
+
+export interface FormationStats {
+  [formation: string]: FormationStat;
 }
 
 export interface TeamValueStat {
-  nickname: string;
-  value: number;
+  average: number;
+  min: number;
+  max: number;
+}
+
+export interface PlayerStat {
+  name: string;
+  season: string;
+  grade: string;
+  count: number;
+  percentage: number;
+}
+
+export interface PositionStats {
+  [position: string]: PlayerStat[];
+}
+
+export interface PickrateResponse {
+  formations: FormationStats;
+  teamValues: TeamValueStat;
+  positions: PositionStats;
+}
+
+export interface JobStatus {
+  done: boolean;
+  result?: PickrateResponse;
+  progress: number;
+  error?: string;
 } 
