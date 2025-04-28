@@ -1,10 +1,20 @@
+import Image from 'next/image'
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-white">
       {/* Navigation */}
       <nav className="bg-white shadow">
         <div className="container mx-auto px-6 py-4">
-          <h1 className="text-2xl font-semibold text-gray-800">FC SUPPORT</h1>
+          <div className="flex justify-center items-center">
+            <Image
+              src="/logo.png"
+              alt="FC SUPPORT"
+              width={200}
+              height={50}
+              className="h-12 w-auto"
+            />
+          </div>
         </div>
       </nav>
 
