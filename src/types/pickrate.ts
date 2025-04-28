@@ -1,10 +1,3 @@
-export interface TopRanker {
-  nickname: string;
-  rank: number;
-  formation: string;
-  teamValue: number;
-}
-
 export interface FormationStat {
   count: number;
   percentage: number;
