@@ -1,7 +1,16 @@
 requests==2.31.0
+<<<<<<< HEAD
 beautifulsoup4==4.12.2
 flask==3.0.2
 asyncio==3.4.3
 fastapi==0.95.2
 uvicorn==0.27.1
 pydantic==1.10.13 
+=======
+pandas==2.2.1
+numpy==1.26.4
+aiohttp==3.9.3
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.4.2 
+>>>>>>> 25516fb66e2c5b0d36bd5238814b08c2f1bca166

@@ -1,9 +1,13 @@
 // 📄 /src/app/api/pickrate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import https from 'https';
 import { v4 as uuidv4 } from 'uuid';
+<<<<<<< HEAD
+=======
+import axiosRetry from 'axios-retry';
+>>>>>>> 25516fb66e2c5b0d36bd5238814b08c2f1bca166
 
 const agent = new https.Agent({ rejectUnauthorized: false });
 const jobs: Record<string, any> = {};
@@ -276,6 +280,334 @@ const TEAM_COLORS = [
   '호주'
 ];
 
+<<<<<<< HEAD
+=======
+// 메타데이터 캐시
+let metaDataCache: {
+  spidMap: Record<string, string>;
+  seasonMap: Record<string, string>;
+  positionMap: Record<string, string>;
+} | null = null;
+
+// 유저 OUID 캐시
+const ouidCache: Record<string, { ouid: string; timestamp: number }> = {};
+
+// 메모리 캐시 개선
+const cache: Record<string, { data: any; timestamp: number }> = {};
+
+// 캐시 유효성 검사 함수
+function isValidCache(key: string): boolean {
+  const cached = cache[key];
+  if (!cached) return false;
+  
+  const now = Date.now();
+  // 1시간(3600000ms) 이내의 캐시만 유효
+  return (now - cached.timestamp) < 3600000;
+}
+
+// 캐시 저장 함수
+function setCache(key: string, data: any): void {
+  cache[key] = {
+    data,
+    timestamp: Date.now()
+  };
+}
+
+// 캐시 조회 함수
+function getCache(key: string): any | null {
+  if (!isValidCache(key)) {
+    delete cache[key]; // 만료된 캐시 삭제
+    return null;
+  }
+  return cache[key].data;
+}
+
+// 메타데이터 로드 함수
+async function loadMetaData() {
+  if (metaDataCache) return metaDataCache;
+
+  const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
+  const [spidData, seasonData, positionData] = await Promise.all([
+    axios.get('https://open.api.nexon.com/static/fconline/meta/spid.json', { headers, httpsAgent: agent }),
+    axios.get('https://open.api.nexon.com/static/fconline/meta/seasonid.json', { headers, httpsAgent: agent }),
+    axios.get('https://open.api.nexon.com/static/fconline/meta/spposition.json', { headers, httpsAgent: agent })
+  ]);
+
+  metaDataCache = {
+    spidMap: Object.fromEntries(spidData.data.map((item: any) => [item.id, item.name])),
+    seasonMap: Object.fromEntries(seasonData.data.map((item: any) => [item.seasonId, item.className.split('(')[0].trim()])),
+    positionMap: Object.fromEntries(positionData.data.map((item: any) => [item.spposition, item.desc]))
+  };
+
+  return metaDataCache;
+}
+
+// Axios 인스턴스 생성 및 재시도 설정
+const axiosWithRetry = axios.create();
+axiosRetry(axiosWithRetry, { 
+  retries: 3,
+  retryDelay: axiosRetry.exponentialDelay,
+  retryCondition: (error: AxiosError) => {
+    return axiosRetry.isNetworkOrIdempotentRequestError(error) || error.code === 'ECONNABORTED';
+  }
+});
+
+// 통계 수집을 위한 변수들
+const formations: { [key: string]: number } = {};
+const maxTeamValue = { nickname: '', value: 0 };
+const minTeamValue = { nickname: '', value: Number.MAX_SAFE_INTEGER };
+let topRanker: { nickname: string; rank: number; formation: string; teamValue: number } | null = null;
+
+async function fetchUserOuid(nickname: string, headers: any) {
+  const cachedData = ouidCache[nickname];
+  const now = Date.now();
+  
+  if (cachedData && (now - cachedData.timestamp) < 24 * 60 * 60 * 1000) {
+    return cachedData.ouid;
+  }
+
+  try {
+    const ouidRes = await axios.get('https://open.api.nexon.com/fconline/v1/id', {
+      params: { nickname },
+      headers,
+      httpsAgent: agent
+    });
+    const ouid = ouidRes.data.ouid;
+    if (ouid) {
+      ouidCache[nickname] = { ouid, timestamp: now };
+    }
+    return ouid;
+  } catch (e) {
+    console.warn(`OUID 조회 실패: ${nickname}`, e);
+    return null;
+  }
+}
+
+async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
+  try {
+    const updateProgress = (progress: number, message: string) => {
+      if (jobs[jobId]) {
+        jobs[jobId].progress = Math.min(99, progress);
+        jobs[jobId].message = message;
+        jobs[jobId].lastUpdate = Date.now();
+      }
+    };
+
+    const cacheKey = `pickrate-${rankLimit}-${teamColor}-${topN}`;
+    const cachedResult = getCache(cacheKey);
+    
+    if (cachedResult) {
+      jobs[jobId] = {
+        status: 'done',
+        result: cachedResult,
+        progress: 100,
+        lastUpdate: Date.now()
+      };
+      return;
+    }
+
+    updateProgress(0, '데이터 수집 준비 중...');
+    const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
+    const metaData = await loadMetaData();
+    updateProgress(5, '메타데이터 로드 완료');
+
+    const pages = Math.ceil(rankLimit / 20);
+    const BATCH_SIZE = 10; // 한 번에 처리할 페이지 수 감소
+    const matchResults: any[] = [];
+
+    // 랭킹 데이터 수집 최적화
+    const fetchRankingBatch = async (startPage: number, endPage: number) => {
+      const promises = [];
+      for (let page = startPage; page <= endPage; page++) {
+        promises.push(
+          axiosWithRetry.get(`https://fconline.nexon.com/datacenter/rank_inner?rt=manager&n4pageno=${page}`)
+            .then(async res => {
+              const dom = new JSDOM(res.data);
+              const trs = dom.window.document.querySelectorAll('.tbody .tr');
+              const users = Array.from(trs).map((tr: any, idx: number) => {
+                const nickname = tr.querySelector('.name .link')?.textContent?.trim() || '';
+                const formation = tr.querySelector('.formation')?.textContent?.trim() || '';
+                const teamValue = parseInt(tr.querySelector('.value')?.textContent?.replace(/[^0-9]/g, '') || '0');
+                const rank = (page - 1) * 20 + idx + 1;
+
+                if (formation) {
+                  formations[formation] = (formations[formation] || 0) + 1;
+                }
+
+                if (teamValue > 0) {
+                  if (teamValue > maxTeamValue.value) {
+                    maxTeamValue.value = teamValue;
+                    maxTeamValue.nickname = nickname;
+                  }
+                  if (teamValue < minTeamValue.value) {
+                    minTeamValue.value = teamValue;
+                    minTeamValue.nickname = nickname;
+                  }
+                }
+
+                if (!topRanker || rank < topRanker.rank) {
+                  topRanker = { nickname, rank, formation, teamValue };
+                }
+
+                return { nickname, rank, formation, teamValue };
+              });
+
+              // 각 유저의 매치 데이터 수집
+              for (const user of users) {
+                try {
+                  const ouid = await fetchUserOuid(user.nickname, headers);
+                  if (!ouid) continue;
+
+                  const matchListRes = await axiosWithRetry.get('https://open.api.nexon.com/fconline/v1/user/match', {
+                    params: { matchtype: 52, ouid, offset: 0, limit: 1 },
+                    headers,
+                    httpsAgent: agent
+                  });
+
+                  if (!matchListRes.data?.[0]) continue;
+
+                  const matchDetailRes = await axiosWithRetry.get('https://open.api.nexon.com/fconline/v1/match-detail', {
+                    params: { matchid: matchListRes.data[0] },
+                    headers,
+                    httpsAgent: agent
+                  });
+
+                  const matchInfo = matchDetailRes.data;
+                  const playerInfo = matchInfo.matchInfo.find((p: any) => p.ouid === ouid);
+                  
+                  if (playerInfo) {
+                    const position = metaData.positionMap[playerInfo.spPosition] || '알 수 없음';
+                    const spid = playerInfo.spId;
+                    const seasonId = Math.floor(spid / 1000000);
+                    
+                    matchResults.push({
+                      nickname: user.nickname,
+                      position: position,
+                      name: metaData.spidMap[spid] || '알 수 없음',
+                      season: metaData.seasonMap[seasonId] || '알 수 없음',
+                      grade: playerInfo.grade || 0
+                    });
+                  }
+                } catch (e) {
+                  console.warn(`매치 데이터 조회 실패: ${user.nickname}`, e);
+                  continue;
+                }
+              }
+
+              return users;
+            })
+            .catch(e => {
+              console.warn(`페이지 ${page} 오류:`, e.message);
+              return [];
+            })
+        );
+
+        // 진행률 업데이트
+        const progress = 5 + Math.round((page / pages) * 80);
+        updateProgress(progress, `데이터 수집 중... (${page}/${pages} 페이지)`);
+      }
+      return (await Promise.all(promises)).flat();
+    };
+
+    // 순차적으로 배치 처리
+    for (let i = 0; i < pages; i += BATCH_SIZE) {
+      const startPage = i + 1;
+      const endPage = Math.min(i + BATCH_SIZE, pages);
+      await fetchRankingBatch(startPage, endPage);
+    }
+
+    updateProgress(85, '데이터 처리 중...');
+
+    // 포지션별 데이터 처리
+    const positionGroups: Record<string, string[]> = {
+      'CAM': ['CAM'],
+      'RAM, LAM': ['RAM', 'LAM'],
+      'RM, LM': ['RM', 'LM'],
+      'CM': ['CM', 'LCM', 'RCM'],
+      'CDM': ['CDM', 'LDM', 'RDM'],
+      'LB': ['LB', 'LWB'],
+      'CB': ['CB', 'LCB', 'RCB', 'SW'],
+      'RB': ['RB', 'RWB'],
+      'GK': ['GK']
+    };
+
+    const summary: Record<string, any[]> = {};
+    const userSet = new Set(matchResults.map(p => p.nickname));
+
+    Object.entries(positionGroups).forEach(([group, positions]) => {
+      const filtered = matchResults.filter(p => 
+        positions.some(pos => p.position.includes(pos))
+      );
+      
+      const grouped = new Map();
+      for (const p of filtered) {
+        const key = `${p.name}||${p.season}||${p.grade}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            name: p.name,
+            season: p.season,
+            grade: p.grade,
+            count: 0,
+            users: new Set()
+          });
+        }
+        const entry = grouped.get(key);
+        entry.count++;
+        entry.users.add(p.nickname);
+      }
+
+      summary[group] = Array.from(grouped.values())
+        .map(v => ({
+          ...v,
+          users: Array.from(v.users)
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, topN);
+    });
+
+    // 포메이션 통계 정렬
+    const sortedFormations = Object.entries(formations)
+      .map(([formation, count]) => ({
+        formation,
+        count,
+        percentage: ((count / rankLimit) * 100).toFixed(1)
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const result = {
+      userCount: userSet.size,
+      topN,
+      summary,
+      topRanker,
+      formations: sortedFormations,
+      teamValue: {
+        max: maxTeamValue,
+        min: minTeamValue,
+        average: Math.round((maxTeamValue.value + minTeamValue.value) / 2)
+      }
+    };
+
+    setCache(cacheKey, result);
+    updateProgress(99, '데이터 처리 완료');
+
+    jobs[jobId] = {
+      status: 'done',
+      result,
+      progress: 100,
+      lastUpdate: Date.now()
+    };
+  } catch (error: unknown) {
+    console.error('Job processing error:', error);
+    jobs[jobId] = {
+      status: 'error',
+      error: error instanceof Error ? error.message : '처리 중 오류가 발생했습니다.',
+      progress: 0,
+      lastUpdate: Date.now()
+    };
+  }
+}
+
+>>>>>>> 25516fb66e2c5b0d36bd5238814b08c2f1bca166
 export async function POST(req: NextRequest) {
   try {
     const jobId = uuidv4();
@@ -324,6 +656,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+<<<<<<< HEAD
   const jobId = req.nextUrl.searchParams.get('jobId');
   
   if (!jobId) {
@@ -544,5 +877,58 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
       progress: 0,
       lastUpdate: Date.now()
     };
+=======
+  try {
+    const { searchParams } = new URL(req.url);
+    const jobId = searchParams.get('jobId');
+    
+    if (!jobId) {
+      // 팀 컬러 목록 반환
+      return NextResponse.json({ teamColors: TEAM_COLORS });
+    }
+
+    const job = jobs[jobId];
+    if (!job) {
+      return NextResponse.json({ error: '작업을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    // 진행 상황 업데이트 로직 개선
+    if (job.status === 'processing') {
+      const now = Date.now();
+      // 30초 이상 업데이트가 없으면 오류로 처리
+      if (now - job.lastUpdate > 30000) {
+        job.status = 'error';
+        job.error = '처리 시간이 초과되었습니다.';
+        job.progress = 0;
+      }
+    }
+
+    if (job.status === 'done') {
+      // 작업 완료 후 정리
+      setTimeout(() => {
+        delete jobs[jobId];
+      }, 300000); // 5분 후 제거
+      return NextResponse.json({ done: true, result: job.result, progress: 100 });
+    }
+
+    if (job.status === 'error') {
+      return NextResponse.json(
+        { error: job.error || '처리 중 오류가 발생했습니다.', progress: 0 },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      status: job.status,
+      progress: job.progress || 0,
+      startTime: job.startTime
+    });
+  } catch (error) {
+    console.error('Status check error:', error);
+    return NextResponse.json(
+      { error: '상태 확인 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
+>>>>>>> 25516fb66e2c5b0d36bd5238814b08c2f1bca166
   }
 }

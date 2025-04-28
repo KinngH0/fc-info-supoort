@@ -1,9 +1,8 @@
-'use client';
-
-import { useState, useCallback, useEffect } from 'react';
-import { FormationStat } from '@/types/pickrate';
+import { PickrateForm } from '@/components/pickrate/PickrateForm';
+import { PickrateResults } from '@/components/pickrate/PickrateResults';
 
 export default function PickratePage() {
+<<<<<<< HEAD
   const [rankLimit, setRankLimit] = useState('');
   const [teamColor, setTeamColor] = useState('');
   const [topN, setTopN] = useState('');
@@ -199,27 +198,14 @@ export default function PickratePage() {
     setter(e.target.value);
   }, []);
 
+=======
+>>>>>>> 25516fb66e2c5b0d36bd5238814b08c2f1bca166
   return (
-    <div className="max-w-5xl mx-auto py-10 px-4 relative pt-24">
-      {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center z-50 text-white px-6">
-          <svg className="animate-spin h-8 w-8 mb-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-          </svg>
-          <p className="text-lg font-semibold mb-4">데이터를 조회하고 있습니다. 잠시만 기다려 주세요...</p>
-          <div className="w-full max-w-sm h-4 bg-gray-700 rounded overflow-hidden">
-            <div className="h-full bg-blue-500 transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
-          </div>
-          <p className="mt-2 text-sm text-gray-300">{progress}% - {progressMessage}</p>
-        </div>
-      )}
-
-      <h1 className="title-main mb-4">🎯 픽률 조회</h1>
-      <p className="text-sub mb-6">상위 랭커들의 팀 컬러별 선수 픽률을 조회합니다.</p>
-
-      <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow mb-10 space-y-4">
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-8">픽률 분석</h1>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
+<<<<<<< HEAD
           <label className="block mb-1 font-medium">조회할 랭커 수</label>
           <input
             type="number"
@@ -232,196 +218,16 @@ export default function PickratePage() {
             required
             min="1"
           />
+=======
+          <h2 className="text-xl font-bold mb-4">분석 조건</h2>
+          <PickrateForm />
+>>>>>>> 25516fb66e2c5b0d36bd5238814b08c2f1bca166
         </div>
-
-        <div className="relative">
-          <label className="block mb-1 font-medium">팀 컬러 필터</label>
-          <input
-            type="text"
-            className="w-full p-2 rounded border dark:bg-gray-700"
-            value={teamColor}
-            onChange={handleTeamColorChange}
-            onClick={handleInputClick}
-            placeholder="조회할 팀컬러 지정"
-            name="teamColor"
-            required
-          />
-          {showSuggestions && teamColorSuggestions.length > 0 && (
-            <div className="absolute z-10 w-full bg-white dark:bg-gray-800 border rounded-b shadow-lg max-h-60 overflow-y-auto">
-              {teamColorSuggestions
-                .filter(color => color.toLowerCase().includes(teamColor.toLowerCase()))
-                .map((color, index) => (
-                  <div
-                    key={index}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
-                    onClick={() => handleTeamColorSelect(color)}
-                  >
-                    {color}
-                  </div>
-                ))}
-            </div>
-          )}
-        </div>
-
         <div>
-          <label className="block mb-1 font-medium">포지션별 상위 선수 수</label>
-          <input
-            type="number"
-            className="w-full p-2 rounded border dark:bg-gray-700"
-            value={topN}
-            onChange={(e) => handleInputChange(e, setTopN)}
-            placeholder="포지션별 몇 위까지 출력할지 지정"
-            onClick={handleInputClick}
-            name="topN"
-            required
-            min="1"
-            max="20"
-          />
+          <h2 className="text-xl font-bold mb-4">분석 결과</h2>
+          <PickrateResults />
         </div>
-
-        <button
-          type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded"
-          disabled={loading}
-        >
-          {loading ? '조회 중입니다...' : '조회하기'}
-        </button>
-      </form>
-
-      {result && (
-        <>
-          <button
-            onClick={handleExport}
-            className="mb-6 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
-          >
-            엑셀 파일로 저장
-          </button>
-
-          <div className="space-y-8">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-              <h2 className="text-lg font-bold mb-4 border-b pb-2">팀 정보 요약</h2>
-              
-              {/* 최고 랭커 정보 */}
-              {result.topRanker && (
-                <div className="mb-6">
-                  <h3 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">최고 랭커</h3>
-                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm">닉네임</p>
-                        <p className="font-medium">{result.topRanker.nickname} ({result.topRanker.rank}위)</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm">포메이션</p>
-                        <p className="font-medium">{result.topRanker.formation || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm">구단가치</p>
-                        <p className="font-medium">{result.topRanker.teamValue ? `${result.topRanker.teamValue.toLocaleString()}억` : '-'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 포메이션 통계 */}
-              {result.formations && result.formations.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">포메이션 통계</h3>
-                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                    <div className="grid grid-cols-2 gap-4">
-                      {result.formations.slice(0, 6).map((f: FormationStat, idx: number) => (
-                        <div key={idx} className="flex justify-between items-center py-1">
-                          <span className="font-medium">{f.formation}</span>
-                          <span className="text-gray-600 dark:text-gray-400">{f.percentage}% ({f.count}명)</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 구단가치 통계 */}
-              {result.teamValue && (
-                <div>
-                  <h3 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">구단가치 통계</h3>
-                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                    <div className="grid grid-cols-1 gap-4">
-                      <div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm">평균</p>
-                        <p className="font-medium">{result.teamValue.average ? `${result.teamValue.average.toLocaleString()}억` : '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm">최고</p>
-                        <p className="font-medium">
-                          {result.teamValue.max?.value ? `${result.teamValue.max.value.toLocaleString()}억` : '-'}
-                          {result.teamValue.max?.nickname && ` (${result.teamValue.max.nickname})`}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm">최저</p>
-                        <p className="font-medium">
-                          {result.teamValue.min?.value ? `${result.teamValue.min.value.toLocaleString()}억` : '-'}
-                          {result.teamValue.min?.nickname && ` (${result.teamValue.min.nickname})`}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <p className="text-sub text-sm">총 분석된 인원: <strong>{result.userCount}</strong>명</p>
-
-            {Object.entries(result.summary).map(([positionGroup, players]) => (
-              <div key={positionGroup} className="mb-8">
-                <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-2">{positionGroup}</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left border dark:border-gray-700">
-                    <thead className="bg-gray-100 dark:bg-gray-700">
-                      <tr>
-                        <th className="px-3 py-2 w-20" onClick={() => toggleSort(positionGroup, 'rank')}>
-                          순위 {sortStates[positionGroup]?.key === 'rank' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
-                        </th>
-                        <th className="px-3 py-2 w-32" onClick={() => toggleSort(positionGroup, 'name')}>
-                          선수명 {sortStates[positionGroup]?.key === 'name' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
-                        </th>
-                        <th className="px-3 py-2 w-32" onClick={() => toggleSort(positionGroup, 'season')}>
-                          시즌 {sortStates[positionGroup]?.key === 'season' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
-                        </th>
-                        <th className="px-3 py-2 w-24" onClick={() => toggleSort(positionGroup, 'grade')}>
-                          강화단계 {sortStates[positionGroup]?.key === 'grade' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
-                        </th>
-                        <th className="px-3 py-2 w-32" onClick={() => toggleSort(positionGroup, 'count')}>
-                          픽률 {sortStates[positionGroup]?.key === 'count' && (sortStates[positionGroup]?.asc ? ' 🔼' : ' 🔽')}
-                        </th>
-                        <th className="px-3 py-2">사용자</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedPlayers(players as any[], positionGroup).map((p, idx) => {
-                        const percent = ((p.count / result.userCount) * 100).toFixed(1);
-                        return (
-                          <tr key={idx} className="border-t dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
-                            <td className="px-3 py-2">{idx + 1}위</td>
-                            <td className="px-3 py-2">{p.name}</td>
-                            <td className="px-3 py-2">{p.season}</td>
-                            <td className="px-3 py-2">{p.grade}</td>
-                            <td className="px-3 py-2">{percent}% ({p.count}명)</td>
-                            <td className="px-3 py-2 text-gray-500 dark:text-gray-400">
-                              {p.users.slice(0, 3).join(', ')}{p.users.length > 3 ? ` 외 ${p.users.length - 3}명` : ''}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      </div>
     </div>
   );
 }
