@@ -484,44 +484,6 @@ async function fetchUserOuid(nickname: string, headers: any) {
   }
 }
 
-export async function fetchUserMatchData(user: { nickname: string; rank: number }, headers: any) {
-  try {
-    const ouid = await fetchUserOuid(user.nickname, headers);
-    if (!ouid) return null;
-
-    // 캐시된 매치 데이터 확인
-    const cacheKey = `${user.nickname}-${ouid}`;
-    const cachedMatch = matchCache[cacheKey];
-    const now = Date.now();
-
-    // 1시간 이내의 캐시된 데이터가 있으면 재사용
-    if (cachedMatch && (now - cachedMatch.timestamp) < 60 * 60 * 1000) {
-      return cachedMatch.data;
-    }
-
-    const matchListRes = await axios.get('https://open.api.nexon.com/fconline/v1/user/match', {
-      params: { matchtype: 52, ouid, offset: 0, limit: 1 },
-      headers,
-      httpsAgent: agent
-    });
-    const matchId = matchListRes.data[0];
-    if (!matchId) return null;
-
-    const matchDetailRes = await axios.get('https://open.api.nexon.com/fconline/v1/match-detail', {
-      params: { matchid: matchId },
-      headers,
-      httpsAgent: agent
-    });
-
-    const result = { matchDetail: matchDetailRes.data, ouid };
-    matchCache[cacheKey] = { data: result, timestamp: now };
-    return result;
-  } catch (e) {
-    console.warn(`매치 데이터 조회 실패: ${user.nickname}`, e);
-    return null;
-  }
-}
-
 export async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
   try {
     const updateProgress = (progress: number, message: string) => {
