@@ -1,39 +1,28 @@
-export interface FormationStat {
-  count: number;
-  percentage: number;
-}
-
-export interface FormationStats {
-  [formation: string]: FormationStat;
-}
-
-export interface TeamValueStat {
-  average: number;
-  min: number;
-  max: number;
-}
-
-export interface PlayerStat {
+export interface Formation {
   name: string;
-  season: string;
-  grade: string;
   count: number;
-  percentage: number;
 }
 
-export interface PositionStats {
-  [position: string]: PlayerStat[];
+export interface TeamValue {
+  name: string;
+  count: number;
+}
+
+export interface Position {
+  name: string;
+  count: number;
 }
 
 export interface PickrateResponse {
-  formations: FormationStats;
-  teamValues: TeamValueStat;
-  positions: PositionStats;
+  formations: Formation[];
+  teamValues: TeamValue[];
+  positions: Position[];
 }
 
 export interface JobStatus {
-  done: boolean;
-  result?: PickrateResponse;
+  jobId: string;
   progress: number;
+  done: boolean;
   error?: string;
+  result?: PickrateResponse;
 } 
