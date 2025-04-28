@@ -4,7 +4,6 @@ import { JSDOM } from 'jsdom';
 import axios, { AxiosError } from 'axios';
 import https from 'https';
 import { v4 as uuidv4 } from 'uuid';
-import { TopRanker, TeamValueStat } from '@/types/pickrate';
 import axiosRetry from 'axios-retry';
 
 const agent = new https.Agent({ rejectUnauthorized: false });
@@ -523,7 +522,7 @@ async function fetchUserMatchData(user: { nickname: string; rank: number }, head
   }
 }
 
-async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
+export async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
   try {
     const updateProgress = (progress: number, message: string) => {
       if (jobs[jobId]) {
@@ -548,14 +547,12 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
 
     updateProgress(0, '데이터 수집 준비 중...');
 
-    const normalizedFilter = teamColor.replace(/\s/g, '').toLowerCase();
     const headers = { 'x-nxopen-api-key': process.env.FC_API_KEY! };
     
-    const metaData = await loadMetaData();
+    await loadMetaData();
     updateProgress(5, '메타데이터 로드 완료');
 
     const pages = Math.ceil(rankLimit / 20);
-    const rankedUsers: { nickname: string; rank: number; formation?: string; teamValue?: number }[] = [];
     const BATCH_SIZE = 500;
     
     // 랭킹 데이터 수집 최적화
