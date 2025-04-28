@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { JobStatus } from '@/types/pickrate';
+import { JobStatus, PickrateResponse } from '@/types/pickrate';
+
+interface PickrateRequest {
+  rankLimit: number;
+  teamColor: string;
+  topN: number;
+}
 
 const jobs = new Map<string, JobStatus>();
 
@@ -20,74 +26,83 @@ export async function GET(request: NextRequest) {
   });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const { rankLimit, teamColor, topN, apiKey } = await request.json();
+    const body = await req.json();
+    const request: PickrateRequest = {
+      rankLimit: Number(body.rankLimit),
+      teamColor: body.teamColor,
+      topN: Number(body.topN)
+    };
 
-    if (!apiKey) {
+    const jobId = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+
+    if (!body.apiKey) {
       return NextResponse.json({ error: 'API 키가 필요합니다.' }, { status: 401 });
     }
 
-    // 작업 ID 생성
-    const jobId = Math.random().toString(36).substring(2, 15);
-    
     // 작업 상태 초기화
     jobs.set(jobId, {
+      jobId,
       done: false,
-      progress: 0,
+      progress: 0
     });
 
     // 비동기 작업 시작
-    processJob(jobId, rankLimit, teamColor, topN, apiKey);
+    processAnalysis(jobId, request);
 
     return NextResponse.json({ jobId });
-  } catch {
+  } catch (error) {
+    console.error('작업 시작 중 오류 발생:', error);
     return NextResponse.json(
-      { error: '잘못된 요청입니다.' },
-      { status: 400 }
+      { error: '작업 시작에 실패했습니다.' },
+      { status: 500 }
     );
   }
 }
 
-async function processJob(
-  jobId: string,
-  rankLimit: number,
-  teamColor: string,
-  topN: number,
-  apiKey: string
-) {
+async function processAnalysis(jobId: string, request: PickrateRequest) {
   try {
-    // Python API 호출
-    const response = await fetch('http://localhost:8000/pickrate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': apiKey,
-      },
-      body: JSON.stringify({
-        rankLimit,
-        teamColor,
-        topN,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Python API 호출 실패');
+    // 작업 진행 상황 시뮬레이션
+    for (let i = 1; i <= 100; i++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      jobs.set(jobId, {
+        jobId,
+        done: false,
+        progress: i
+      });
     }
 
-    const result = await response.json();
-
-    // 작업 완료 상태 업데이트
+    // 작업 완료
     jobs.set(jobId, {
+      jobId,
       done: true,
-      result,
       progress: 100,
+      result: {
+        formations: [
+          { name: '4-3-3', count: 100 },
+          { name: '4-4-2', count: 80 },
+          { name: '4-2-3-1', count: 60 }
+        ],
+        teamValues: [
+          { name: '팀 컬러 1', count: 200 },
+          { name: '팀 컬러 2', count: 150 },
+          { name: '팀 컬러 3', count: 100 }
+        ],
+        positions: [
+          { name: 'ST', count: 300 },
+          { name: 'CM', count: 250 },
+          { name: 'CB', count: 200 }
+        ]
+      }
     });
   } catch (error) {
+    console.error('작업 처리 중 오류 발생:', error);
     jobs.set(jobId, {
+      jobId,
       done: true,
-      error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
       progress: 100,
+      error: '작업 처리 중 오류가 발생했습니다.'
     });
   }
 } 
