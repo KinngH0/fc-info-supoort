@@ -484,7 +484,7 @@ async function fetchUserOuid(nickname: string, headers: any) {
   }
 }
 
-async function fetchUserMatchData(user: { nickname: string; rank: number }, headers: any) {
+export async function fetchUserMatchData(user: { nickname: string; rank: number }, headers: any) {
   try {
     const ouid = await fetchUserOuid(user.nickname, headers);
     if (!ouid) return null;
