@@ -287,9 +287,6 @@ let metaDataCache: {
 // 유저 OUID 캐시
 const ouidCache: Record<string, { ouid: string; timestamp: number }> = {};
 
-// 매치 데이터 캐시
-const matchCache: Record<string, { data: any; timestamp: number }> = {};
-
 // 메모리 캐시 개선
 const cache: Record<string, { data: any; timestamp: number }> = {};
 
