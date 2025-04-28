@@ -70,7 +70,7 @@ export default function PickratePage() {
       setIsLoading(false);
       setError(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.');
     }
-  }, [session]);
+  }, [session, isLoading]);
 
   return (
     <div className="container mx-auto px-4 py-8">

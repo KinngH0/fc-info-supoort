@@ -1,4 +1,4 @@
-import { FormationStats, TeamValueStat, PositionStats, PickrateResponse, JobStatus } from '@/types/pickrate';
+import { JobStatus } from '@/types/pickrate';
 
 export async function fetchTeamColors(): Promise<string[]> {
   const response = await fetch('/api/python/pickrate');
