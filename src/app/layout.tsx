@@ -1,9 +1,15 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import Header from '@/components/Header';
 
 const inter = Inter({ subsets: ['latin'] });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+};
 
 export const metadata: Metadata = {
   title: 'FC INFO SUPPORT',
@@ -22,11 +28,6 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'FC INFO SUPPORT',
     description: 'FC 온라인의 다양한 통계와 정보를 제공하는 서비스입니다.',
-  },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
   },
   robots: {
     index: true,
