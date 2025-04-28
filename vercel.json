@@ -2,27 +2,18 @@
   "version": 2,
   "builds": [
     {
-<<<<<<< HEAD
-      "src": "src/main.py",
-=======
       "src": "package.json",
       "use": "@vercel/next"
     },
     {
       "src": "api/python/pickrate.py",
->>>>>>> 25516fb66e2c5b0d36bd5238814b08c2f1bca166
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-<<<<<<< HEAD
-      "src": "/(.*)",
-      "dest": "src/main.py"
-=======
       "src": "/api/python/(.*)",
       "dest": "api/python/pickrate.py"
->>>>>>> 25516fb66e2c5b0d36bd5238814b08c2f1bca166
     }
   ]
 } 
