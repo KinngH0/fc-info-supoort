@@ -231,7 +231,6 @@ export default function PickratePage() {
             name="rankLimit"
             required
             min="1"
-            max="1000"
           />
         </div>
 
