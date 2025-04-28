@@ -1,93 +1,61 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { fetchTeamColors } from '@/lib/api/pickrate';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
-const schema = z.object({
-  rankLimit: z.number().min(1).max(1000),
-  teamColor: z.string(),
-  topN: z.number().min(1).max(10),
-});
+export function PickrateForm() {
+  const [rankLimit, setRankLimit] = useState<number>(100);
+  const [teamColor, setTeamColor] = useState<string>('all');
+  const [topN, setTopN] = useState<number>(10);
 
-type FormData = z.infer<typeof schema>;
-
-interface PickrateFormProps {
-  onSubmit: (data: FormData) => void;
-  isLoading: boolean;
-}
-
-export function PickrateForm({ onSubmit, isLoading }: PickrateFormProps) {
-  const [teamColors, setTeamColors] = useState<string[]>([]);
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      rankLimit: 100,
-      teamColor: 'all',
-      topN: 5,
-    },
-  });
-
-  useEffect(() => {
-    fetchTeamColors().then(setTeamColors).catch(console.error);
-  }, []);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // TODO: API 연동
+  };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mb-8">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-1">랭킹 범위</label>
+        <label className="block text-sm font-medium mb-1">랭크 제한</label>
         <input
           type="number"
-          {...register('rankLimit', { valueAsNumber: true })}
+          value={rankLimit}
+          onChange={(e) => setRankLimit(Number(e.target.value))}
           className="w-full p-2 border rounded"
-          min={1}
-          max={1000}
+          min="1"
+          max="1000"
         />
-        {errors.rankLimit && (
-          <p className="text-red-500 text-sm">{errors.rankLimit.message}</p>
-        )}
       </div>
-
       <div>
         <label className="block text-sm font-medium mb-1">팀 컬러</label>
         <select
-          {...register('teamColor')}
+          value={teamColor}
+          onChange={(e) => setTeamColor(e.target.value)}
           className="w-full p-2 border rounded"
         >
           <option value="all">전체</option>
-          {teamColors.map((color) => (
-            <option key={color} value={color}>
-              {color}
-            </option>
-          ))}
+          <option value="premier">프리미어 리그</option>
+          <option value="la_liga">라 리가</option>
+          <option value="bundesliga">분데스리가</option>
+          <option value="serie_a">세리에 A</option>
+          <option value="ligue_1">리그 1</option>
         </select>
-        {errors.teamColor && (
-          <p className="text-red-500 text-sm">{errors.teamColor.message}</p>
-        )}
       </div>
-
       <div>
-        <label className="block text-sm font-medium mb-1">상위 선수 수</label>
+        <label className="block text-sm font-medium mb-1">상위 N개</label>
         <input
           type="number"
-          {...register('topN', { valueAsNumber: true })}
+          value={topN}
+          onChange={(e) => setTopN(Number(e.target.value))}
           className="w-full p-2 border rounded"
-          min={1}
-          max={10}
+          min="1"
+          max="100"
         />
-        {errors.topN && (
-          <p className="text-red-500 text-sm">{errors.topN.message}</p>
-        )}
       </div>
-
       <button
         type="submit"
-        disabled={isLoading}
-        className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:bg-gray-400"
+        className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
       >
-        {isLoading ? '처리 중...' : '조회 시작'}
+        분석 시작
       </button>
     </form>
   );
