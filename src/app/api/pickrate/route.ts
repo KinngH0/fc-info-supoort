@@ -352,7 +352,6 @@ const formations: { [key: string]: number } = {};
 const maxTeamValue = { nickname: '', value: 0 };
 const minTeamValue = { nickname: '', value: Number.MAX_SAFE_INTEGER };
 let topRanker: { nickname: string; rank: number; formation: string; teamValue: number } | null = null;
-const rankedUsers: any[] = [];
 
 async function fetchUserOuid(nickname: string, headers: any) {
   const cachedData = ouidCache[nickname];
@@ -475,7 +474,6 @@ async function processJob(jobId: string, rankLimit: number, teamColor: string, t
                     const position = metaData.positionMap[playerInfo.spPosition] || '알 수 없음';
                     const spid = playerInfo.spId;
                     const seasonId = Math.floor(spid / 1000000);
-                    const playerId = spid % 1000000;
                     
                     matchResults.push({
                       nickname: user.nickname,
