@@ -354,108 +354,6 @@ const minTeamValue = { nickname: '', value: Number.MAX_SAFE_INTEGER };
 let topRanker: { nickname: string; rank: number; formation: string; teamValue: number } | null = null;
 const rankedUsers: any[] = [];
 
-export async function POST(req: NextRequest) {
-  try {
-    const jobId = uuidv4();
-    const { rankLimit, teamColor, topN } = await req.json();
-    
-    // 입력값 검증 추가
-    if (!rankLimit || !teamColor || !topN) {
-      return NextResponse.json({ error: '필수 파라미터가 누락되었습니다.' }, { status: 400 });
-    }
-
-    // 팀 컬러 유효성 검사 추가
-    const normalizedTeamColor = teamColor.toLowerCase();
-    if (normalizedTeamColor !== 'all' && 
-        !TEAM_COLORS.some(tc => tc.toLowerCase() === normalizedTeamColor)) {
-      return NextResponse.json(
-        { error: '유효하지 않은 팀 컬러입니다. "all"을 입력하거나 유효한 팀 컬러를 선택해 주세요.', validTeamColors: TEAM_COLORS },
-        { status: 400 }
-      );
-    }
-
-    jobs[jobId] = { 
-      status: 'processing', 
-      progress: 0,
-      startTime: Date.now(),
-      lastUpdate: Date.now()
-    };
-
-    // 비동기 작업 시작
-    processJob(jobId, rankLimit, teamColor, topN).catch(error => {
-      console.error(`Job ${jobId} failed:`, error);
-      jobs[jobId] = { 
-        status: 'error', 
-        error: error.message || '처리 중 오류가 발생했습니다.',
-        progress: 0 
-      };
-    });
-
-    return NextResponse.json({ jobId });
-  } catch (error) {
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { error: '요청을 처리하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const jobId = searchParams.get('jobId');
-    
-    if (!jobId) {
-      // 팀 컬러 목록 반환
-      return NextResponse.json({ teamColors: TEAM_COLORS });
-    }
-
-    const job = jobs[jobId];
-    if (!job) {
-      return NextResponse.json({ error: '작업을 찾을 수 없습니다.' }, { status: 404 });
-    }
-
-    // 진행 상황 업데이트 로직 개선
-    if (job.status === 'processing') {
-      const now = Date.now();
-      // 30초 이상 업데이트가 없으면 오류로 처리
-      if (now - job.lastUpdate > 30000) {
-        job.status = 'error';
-        job.error = '처리 시간이 초과되었습니다.';
-        job.progress = 0;
-      }
-    }
-
-    if (job.status === 'done') {
-      // 작업 완료 후 정리
-      setTimeout(() => {
-        delete jobs[jobId];
-      }, 300000); // 5분 후 제거
-      return NextResponse.json({ done: true, result: job.result, progress: 100 });
-    }
-
-    if (job.status === 'error') {
-      return NextResponse.json(
-        { error: job.error || '처리 중 오류가 발생했습니다.', progress: 0 },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      status: job.status,
-      progress: job.progress || 0,
-      startTime: job.startTime
-    });
-  } catch (error) {
-    console.error('Status check error:', error);
-    return NextResponse.json(
-      { error: '상태 확인 중 오류가 발생했습니다.' },
-      { status: 500 }
-    );
-  }
-}
-
 async function fetchUserOuid(nickname: string, headers: any) {
   const cachedData = ouidCache[nickname];
   const now = Date.now();
@@ -481,7 +379,7 @@ async function fetchUserOuid(nickname: string, headers: any) {
   }
 }
 
-export async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
+async function processJob(jobId: string, rankLimit: number, teamColor: string, topN: number) {
   try {
     const updateProgress = (progress: number, message: string) => {
       if (jobs[jobId]) {
@@ -711,5 +609,107 @@ export async function processJob(jobId: string, rankLimit: number, teamColor: st
       progress: 0,
       lastUpdate: Date.now()
     };
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const jobId = uuidv4();
+    const { rankLimit, teamColor, topN } = await req.json();
+    
+    // 입력값 검증 추가
+    if (!rankLimit || !teamColor || !topN) {
+      return NextResponse.json({ error: '필수 파라미터가 누락되었습니다.' }, { status: 400 });
+    }
+
+    // 팀 컬러 유효성 검사 추가
+    const normalizedTeamColor = teamColor.toLowerCase();
+    if (normalizedTeamColor !== 'all' && 
+        !TEAM_COLORS.some(tc => tc.toLowerCase() === normalizedTeamColor)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 팀 컬러입니다. "all"을 입력하거나 유효한 팀 컬러를 선택해 주세요.', validTeamColors: TEAM_COLORS },
+        { status: 400 }
+      );
+    }
+
+    jobs[jobId] = { 
+      status: 'processing', 
+      progress: 0,
+      startTime: Date.now(),
+      lastUpdate: Date.now()
+    };
+
+    // 비동기 작업 시작
+    processJob(jobId, rankLimit, teamColor, topN).catch(error => {
+      console.error(`Job ${jobId} failed:`, error);
+      jobs[jobId] = { 
+        status: 'error', 
+        error: error.message || '처리 중 오류가 발생했습니다.',
+        progress: 0 
+      };
+    });
+
+    return NextResponse.json({ jobId });
+  } catch (error) {
+    console.error('API Error:', error);
+    return NextResponse.json(
+      { error: '요청을 처리하는 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const jobId = searchParams.get('jobId');
+    
+    if (!jobId) {
+      // 팀 컬러 목록 반환
+      return NextResponse.json({ teamColors: TEAM_COLORS });
+    }
+
+    const job = jobs[jobId];
+    if (!job) {
+      return NextResponse.json({ error: '작업을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    // 진행 상황 업데이트 로직 개선
+    if (job.status === 'processing') {
+      const now = Date.now();
+      // 30초 이상 업데이트가 없으면 오류로 처리
+      if (now - job.lastUpdate > 30000) {
+        job.status = 'error';
+        job.error = '처리 시간이 초과되었습니다.';
+        job.progress = 0;
+      }
+    }
+
+    if (job.status === 'done') {
+      // 작업 완료 후 정리
+      setTimeout(() => {
+        delete jobs[jobId];
+      }, 300000); // 5분 후 제거
+      return NextResponse.json({ done: true, result: job.result, progress: 100 });
+    }
+
+    if (job.status === 'error') {
+      return NextResponse.json(
+        { error: job.error || '처리 중 오류가 발생했습니다.', progress: 0 },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      status: job.status,
+      progress: job.progress || 0,
+      startTime: job.startTime
+    });
+  } catch (error) {
+    console.error('Status check error:', error);
+    return NextResponse.json(
+      { error: '상태 확인 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
   }
 }
