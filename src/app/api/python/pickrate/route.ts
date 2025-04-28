@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     processJob(jobId, rankLimit, teamColor, topN, apiKey);
 
     return NextResponse.json({ jobId });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: '잘못된 요청입니다.' },
       { status: 400 }
